@@ -1,0 +1,48 @@
+.DS_Store
+
+# Env (secrets)
+.env
+backend/.env
+.env.local
+.env.*.local
+!.env.example
+!backend/env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Poetry
+*.egg-info/
+dist/
+build/
+
+# Data artifacts (generated)
+backend/data/store.json
+backend/data/embeddings.npy
+
+# Go
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+coverage.out
+
+# Node / Nuxt
+node_modules/
+.nuxt/
+.output/
+dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+
