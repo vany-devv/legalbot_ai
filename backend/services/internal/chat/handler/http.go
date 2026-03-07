@@ -7,30 +7,67 @@ import (
 
 	"github.com/google/uuid"
 	"legalbot/services/internal/chat/usecase"
+	"legalbot/services/internal/middleware"
 )
 
 type ChatHandler struct {
-	createConversationUC *usecase.CreateConversationUseCase
-	saveMessageUC        *usecase.SaveMessageUseCase
-	getConversationUC    *usecase.GetConversationUseCase
+	createConversationUC  *usecase.CreateConversationUseCase
+	saveMessageUC         *usecase.SaveMessageUseCase
+	getConversationUC     *usecase.GetConversationUseCase
+	listConversationsUC   *usecase.ListConversationsUseCase
 }
 
 func NewChatHandler(
 	createConversationUC *usecase.CreateConversationUseCase,
 	saveMessageUC *usecase.SaveMessageUseCase,
 	getConversationUC *usecase.GetConversationUseCase,
+	listConversationsUC *usecase.ListConversationsUseCase,
 ) *ChatHandler {
 	return &ChatHandler{
-		createConversationUC: createConversationUC,
-		saveMessageUC:        saveMessageUC,
-		getConversationUC:    getConversationUC,
+		createConversationUC:  createConversationUC,
+		saveMessageUC:         saveMessageUC,
+		getConversationUC:     getConversationUC,
+		listConversationsUC:   listConversationsUC,
 	}
 }
 
 func (h *ChatHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("POST /api/chat/conversations", h.handleCreateConversation)
-	mux.HandleFunc("POST /api/chat/messages", h.handleSaveMessage)
+	mux.HandleFunc("/api/chat/conversations", h.handleConversations)
+	mux.HandleFunc("/api/chat/messages", h.handleSaveMessage)
 	mux.HandleFunc("/api/chat/conversations/", h.handleGetConversation)
+}
+
+func (h *ChatHandler) handleConversations(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		h.handleListConversations(w, r)
+	case http.MethodPost:
+		h.handleCreateConversation(w, r)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (h *ChatHandler) handleListConversations(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	parsed, err := uuid.Parse(userID)
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+
+	resp, err := h.listConversationsUC.Execute(r.Context(), parsed, 50, 0)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
 }
 
 func (h *ChatHandler) handleCreateConversation(w http.ResponseWriter, r *http.Request) {
@@ -54,6 +91,10 @@ func (h *ChatHandler) handleCreateConversation(w http.ResponseWriter, r *http.Re
 }
 
 func (h *ChatHandler) handleSaveMessage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	var req usecase.SaveMessageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)

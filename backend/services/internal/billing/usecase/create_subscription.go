@@ -53,9 +53,8 @@ func (uc *CreateSubscriptionUseCase) Execute(ctx context.Context, req CreateSubs
 		return nil, errors.New("user already has active subscription")
 	}
 
-	// Создание платежа
-	paymentID, err := uc.paymentProvider.CreatePayment(plan.Price, "RUB", req.UserID.String())
-	if err != nil {
+	// Создание платежа (stub — результат пока не используется)
+	if _, err := uc.paymentProvider.CreatePayment(plan.Price, "RUB", req.UserID.String()); err != nil {
 		return nil, fmt.Errorf("failed to create payment: %w", err)
 	}
 

@@ -8,20 +8,22 @@ import (
 )
 
 type Config struct {
-	Port        string
-	DatabaseURL string
-	JWTSecret   string
-	Env         string
+	Port          string
+	DatabaseURL   string
+	JWTSecret     string
+	Env           string
+	RAGServiceURL string
 }
 
 func Load() *Config {
 	_ = godotenv.Load()
 	
 	return &Config{
-		Port:        getEnv("PORT", "8080"),
-		DatabaseURL: getEnv("DATABASE_URL", "postgres://user:pass@localhost/legalbot?sslmode=disable"),
-		JWTSecret:   getEnv("JWT_SECRET", "change-me-in-production"),
-		Env:         getEnv("ENV", "development"),
+		Port:          getEnv("PORT", "8080"),
+		DatabaseURL:   getEnv("DATABASE_URL", "postgres://user:pass@localhost/legalbot?sslmode=disable"),
+		JWTSecret:     getEnv("JWT_SECRET", "change-me-in-production"),
+		Env:           getEnv("ENV", "development"),
+		RAGServiceURL: getEnv("RAG_SERVICE_URL", "http://localhost:8000"),
 	}
 }
 

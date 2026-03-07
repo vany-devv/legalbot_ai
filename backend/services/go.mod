@@ -1,6 +1,6 @@
 module legalbot/services
 
-go 1.21
+go 1.22
 
 require (
 	github.com/golang-jwt/jwt/v5 v5.2.1
@@ -8,7 +8,4 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.10.9
 	golang.org/x/crypto v0.23.0
-	gorm.io/driver/postgres v1.5.7
-	gorm.io/gorm v1.25.10
 )
-

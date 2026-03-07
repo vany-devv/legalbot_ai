@@ -2,7 +2,6 @@ package usecase
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -31,14 +30,6 @@ type SaveMessageRequest struct {
 	Content        string
 	Metadata       map[string]interface{} // provider, model, confidence
 	Citations      []CitationData
-}
-
-type CitationData struct {
-	ChunkID  string
-	SourceID string
-	Score    float64
-	Quote    string
-	Meta     map[string]interface{}
 }
 
 type SaveMessageResponse struct {

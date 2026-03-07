@@ -9,23 +9,28 @@ import (
 	"legalbot/services/internal/billing/usecase"
 )
 
-// Wire собирает все зависимости домена billing
-func Wire(db *sql.DB) *handler.BillingHandler {
-	// Repositories
+type Module struct {
+	Handler     *handler.BillingHandler
+	CheckLimits *usecase.CheckLimitsUseCase
+	RecordUsage *usecase.RecordUsageUseCase
+}
+
+func Wire(db *sql.DB) *Module {
 	planRepo := repository.NewPostgresPlanRepository(db)
 	subscriptionRepo := repository.NewPostgresSubscriptionRepository(db)
 	usageRepo := repository.NewPostgresUsageRepository(db)
 
-	// Infrastructure
 	paymentProvider := infrastructure.NewStubPaymentProvider()
 
-	// Use cases
 	createSubscriptionUC := usecase.NewCreateSubscriptionUseCase(planRepo, subscriptionRepo, paymentProvider)
 	checkLimitsUC := usecase.NewCheckLimitsUseCase(subscriptionRepo, usageRepo, planRepo)
 	recordUsageUC := usecase.NewRecordUsageUseCase(usageRepo)
 
-	// Handler
-	return handler.NewBillingHandler(createSubscriptionUC, checkLimitsUC, recordUsageUC)
+	return &Module{
+		Handler:     handler.NewBillingHandler(createSubscriptionUC, checkLimitsUC, recordUsageUC),
+		CheckLimits: checkLimitsUC,
+		RecordUsage: recordUsageUC,
+	}
 }
 
 

@@ -27,12 +27,16 @@ func NewAuthHandler(
 }
 
 func (h *AuthHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("POST /api/auth/register", h.handleRegister)
-	mux.HandleFunc("POST /api/auth/login", h.handleLogin)
-	mux.HandleFunc("GET /api/auth/me", h.handleMe)
+	mux.HandleFunc("/api/auth/register", h.handleRegister)
+	mux.HandleFunc("/api/auth/login", h.handleLogin)
+	mux.HandleFunc("/api/auth/me", h.handleMe)
 }
 
 func (h *AuthHandler) handleRegister(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	var req usecase.RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
@@ -50,6 +54,10 @@ func (h *AuthHandler) handleRegister(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	var req usecase.LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
@@ -67,6 +75,10 @@ func (h *AuthHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandler) handleMe(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	// Извлечение токена из заголовка
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {

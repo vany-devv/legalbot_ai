@@ -8,20 +8,27 @@ import (
 	"legalbot/services/internal/chat/usecase"
 )
 
-// Wire собирает все зависимости домена chat
-func Wire(db *sql.DB) *handler.ChatHandler {
-	// Repositories
+type Module struct {
+	Handler            *handler.ChatHandler
+	CreateConversation *usecase.CreateConversationUseCase
+	SaveMessage        *usecase.SaveMessageUseCase
+}
+
+func Wire(db *sql.DB) *Module {
 	conversationRepo := repository.NewPostgresConversationRepository(db)
 	messageRepo := repository.NewPostgresMessageRepository(db)
 	citationRepo := repository.NewPostgresCitationRepository(db)
 
-	// Use cases
 	createConversationUC := usecase.NewCreateConversationUseCase(conversationRepo)
 	saveMessageUC := usecase.NewSaveMessageUseCase(messageRepo, citationRepo)
 	getConversationUC := usecase.NewGetConversationUseCase(conversationRepo, messageRepo, citationRepo)
+	listConversationsUC := usecase.NewListConversationsUseCase(conversationRepo)
 
-	// Handler
-	return handler.NewChatHandler(createConversationUC, saveMessageUC, getConversationUC)
+	return &Module{
+		Handler:            handler.NewChatHandler(createConversationUC, saveMessageUC, getConversationUC, listConversationsUC),
+		CreateConversation: createConversationUC,
+		SaveMessage:        saveMessageUC,
+	}
 }
 
 

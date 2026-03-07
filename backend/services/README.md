@@ -80,9 +80,7 @@ JWT_SECRET=your-secret-key
 ENV=development
 ```
 
-## API Endpoints
-
-### Auth
+## API Endpoints### Auth
 - `POST /api/auth/register` - регистрация
 - `POST /api/auth/login` - вход
 - `GET /api/auth/me` - текущий пользователь

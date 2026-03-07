@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/google/uuid"
 	"legalbot/services/internal/billing/usecase"
 )
 
@@ -27,12 +26,16 @@ func NewBillingHandler(
 }
 
 func (h *BillingHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("POST /api/billing/subscriptions", h.handleCreateSubscription)
-	mux.HandleFunc("POST /api/billing/limits/check", h.handleCheckLimits)
-	mux.HandleFunc("POST /api/billing/usage", h.handleRecordUsage)
+	mux.HandleFunc("/api/billing/subscriptions", h.handleCreateSubscription)
+	mux.HandleFunc("/api/billing/limits/check", h.handleCheckLimits)
+	mux.HandleFunc("/api/billing/usage", h.handleRecordUsage)
 }
 
 func (h *BillingHandler) handleCreateSubscription(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	var req usecase.CreateSubscriptionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
@@ -53,6 +56,10 @@ func (h *BillingHandler) handleCreateSubscription(w http.ResponseWriter, r *http
 }
 
 func (h *BillingHandler) handleCheckLimits(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	var req usecase.CheckLimitsRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
@@ -72,6 +79,10 @@ func (h *BillingHandler) handleCheckLimits(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *BillingHandler) handleRecordUsage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	var req usecase.RecordUsageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)

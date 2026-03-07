@@ -2,8 +2,6 @@ package usecase
 
 import (
 	"context"
-	"fmt"
-	"time"
 
 	"github.com/google/uuid"
 	"legalbot/services/internal/billing/domain"

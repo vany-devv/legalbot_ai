@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"fmt"
 
 	"github.com/google/uuid"
 	"legalbot/services/internal/chat/domain"
