@@ -1,0 +1,14 @@
+# Production override — uses prebuilt images from GHCR instead of building locally.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+services:
+  rag:
+    build: !reset null
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/legalbot-rag:latest
+
+  api:
+    build: !reset null
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/legalbot-api:latest
+
+  frontend:
+    build: !reset null
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/legalbot-frontend:latest

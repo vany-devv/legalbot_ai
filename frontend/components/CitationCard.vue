@@ -1,11 +1,52 @@
 <template>
-  <div class="citation-card">
-    <div class="citation-header">
-      <span class="citation-source">{{ citation.meta?.act || citation.id }}</span>
-      <span v-if="citation.meta?.article" class="citation-article">ст. {{ citation.meta.article }}</span>
-      <span class="citation-score">{{ (citation.score * 100).toFixed(0) }}%</span>
-    </div>
-    <p class="citation-quote">{{ citation.quote }}</p>
+  <div
+    class="rounded-lg border border-rim-faint bg-cite overflow-hidden transition-colors"
+    :class="expanded ? 'border-rim' : 'hover:border-rim'"
+  >
+    <!-- Header — always visible -->
+    <button
+      class="w-full flex items-center gap-2.5 px-3 py-2.5 text-left cursor-pointer group"
+      @click="expanded = !expanded"
+    >
+      <!-- Accent dot -->
+      <span class="w-1.5 h-1.5 rounded-full bg-brand opacity-70 flex-shrink-0" />
+
+      <!-- Law name -->
+      <span class="flex-1 min-w-0 text-[14px] font-semibold text-ink truncate">
+        {{ citation.meta?.law || 'Источник' }}
+      </span>
+
+      <!-- Tags -->
+      <span v-if="citation.meta?.article" class="flex-shrink-0 text-[11px] text-brand bg-brand-dim px-1.5 py-0.5 rounded font-medium">
+        ст. {{ citation.meta.article }}
+      </span>
+      <span v-if="citation.meta?.chapter" class="flex-shrink-0 text-[11px] text-ink-faint bg-raised px-1.5 py-0.5 rounded hidden sm:inline">
+        гл. {{ citation.meta.chapter }}
+      </span>
+
+      <!-- Score -->
+      <span class="flex-shrink-0 text-[11px] text-ink-faint tabular-nums">
+        {{ (citation.score * 100).toFixed(0) }}%
+      </span>
+
+      <!-- Expand chevron -->
+      <svg
+        width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+        class="flex-shrink-0 text-ink-faint transition-transform duration-150"
+        :class="expanded ? 'rotate-180' : ''"
+      >
+        <polyline points="6 9 12 15 18 9"/>
+      </svg>
+    </button>
+
+    <!-- Expanded quote -->
+    <Transition name="quote-expand">
+      <div v-if="expanded" class="px-3 pb-3 pt-0">
+        <div class="border-t border-rim-faint pt-2.5">
+          <p class="text-[13px] leading-[1.6] text-ink-muted">{{ citation.quote }}</p>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -13,39 +54,18 @@
 import type { Citation } from '~/composables/useChat'
 
 defineProps<{ citation: Citation }>()
+
+const expanded = ref(false)
 </script>
 
 <style scoped>
-.citation-card {
-  padding: 10px 12px;
-  background: var(--bg-citation);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-sm);
+.quote-expand-enter-active,
+.quote-expand-leave-active {
+  transition: opacity 0.15s ease, transform 0.12s ease;
 }
-
-.citation-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
-  font-size: 12px;
-}
-.citation-source {
-  font-weight: 600;
-  color: var(--accent);
-}
-.citation-article {
-  color: var(--text-secondary);
-}
-.citation-score {
-  margin-left: auto;
-  color: var(--text-tertiary);
-  font-size: 11px;
-}
-
-.citation-quote {
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--text-secondary);
+.quote-expand-enter-from,
+.quote-expand-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 </style>

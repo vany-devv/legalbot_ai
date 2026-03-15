@@ -1,8 +1,16 @@
+function uid() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2)
+}
+
 export interface Citation {
   id: string
   score: number
   meta: Record<string, any>
   quote: string
+}
+
+export interface ThinkingStep {
+  text: string
 }
 
 export interface ChatMessage {
@@ -14,6 +22,8 @@ export interface ChatMessage {
   model?: string
   confidence?: number
   createdAt: Date
+  isStreaming?: boolean
+  thinking?: ThinkingStep[]
 }
 
 export interface Conversation {
@@ -47,17 +57,9 @@ export function useChat() {
     try {
       const headers = authHeaders()
       if (!headers.Authorization) return
-      const res = await $fetch<Array<{ id: string; title: string; updated_at: string }>>(`${api}/chat/conversations`, {
-        headers,
-      })
-      conversations.value = (res || []).map(c => ({
-        id: c.id,
-        title: c.title,
-        updatedAt: new Date(c.updated_at),
-      }))
-    } catch {
-      // silently fail
-    }
+      const res = await $fetch<Array<{ id: string; title: string; updated_at: string }>>(`${api}/chat/conversations`, { headers })
+      conversations.value = (res || []).map(c => ({ id: c.id, title: c.title, updatedAt: new Date(c.updated_at) }))
+    } catch { /* silently fail */ }
   }
 
   async function loadMessages(conversationId: string) {
@@ -66,16 +68,13 @@ export function useChat() {
         ConversationID: string
         Title: string
         Messages: Array<{
-          ID: string
-          Role: string
-          Content: string
-          Metadata: Record<string, any>
+          ID: string; Role: string; Content: string; Metadata: Record<string, any>
           Citations: Array<{ ChunkID: string; SourceID: string; Score: number; Quote: string; Meta: Record<string, any> }>
           CreatedAt: string
         }>
-      }>(`${api}/chat/conversations/${conversationId}`, {
-        headers: authHeaders(),
-      })
+      }>(`${api}/chat/conversations/${conversationId}`, { headers: authHeaders() })
+      // Guard against race condition: user may have switched conversations
+      if (currentConversationId.value !== conversationId) return
       messages.value = (res.Messages || []).map(m => ({
         id: m.ID,
         role: m.Role as 'user' | 'assistant',
@@ -86,72 +85,84 @@ export function useChat() {
         confidence: m.Metadata?.confidence,
         createdAt: new Date(m.CreatedAt),
       }))
-    } catch {
-      // silently fail
-    }
+    } catch { /* silently fail */ }
   }
 
-  async function send(query: string, topK = 8) {
+  async function send(query: string, topK = 6) {
     if (!query.trim() || sending.value) return
 
-    const userMsg: ChatMessage = {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content: query,
-      createdAt: new Date(),
-    }
-    messages.value.push(userMsg)
+    messages.value.push({ id: uid(), role: 'user', content: query, createdAt: new Date() })
     sending.value = true
+
+    // Streaming assistant placeholder
+    messages.value.push({ id: uid(), role: 'assistant', content: '', isStreaming: true, thinking: [], createdAt: new Date() })
+    const msgIndex = messages.value.length - 1
 
     try {
       const body: Record<string, any> = { query, top_k: topK }
-      if (currentConversationId.value) {
-        body.conversation_id = currentConversationId.value
-      }
+      if (currentConversationId.value) body.conversation_id = currentConversationId.value
 
-      const res = await $fetch<{
-        answer: string
-        citations: Citation[]
-        confidence: number
-        provider: string
-        model: string
-        conversation_id: string
-        message_id: string
-      }>(`${api}/chat/ask`, {
+      const response = await fetch(`${api}/chat/ask/stream`, {
         method: 'POST',
-        body,
-        headers: authHeaders(),
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify(body),
       })
 
-      if (!currentConversationId.value && res.conversation_id) {
-        currentConversationId.value = res.conversation_id
-        conversations.value.unshift({
-          id: res.conversation_id,
-          title: query.slice(0, 80),
-          updatedAt: new Date(),
-        })
-      }
+      if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`)
 
-      const assistantMsg: ChatMessage = {
-        id: res.message_id || crypto.randomUUID(),
-        role: 'assistant',
-        content: res.answer,
-        citations: res.citations,
-        provider: res.provider,
-        model: res.model,
-        confidence: res.confidence,
-        createdAt: new Date(),
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+
+        const lines = buffer.split('\n')
+        buffer = lines.pop()!
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          const payload = line.slice(6).trim()
+          if (payload === '[DONE]') break
+
+          let event: any
+          try { event = JSON.parse(payload) } catch { continue }
+
+          const msg = messages.value[msgIndex]
+          if (!msg) continue
+
+          switch (event.type) {
+            case 'thinking':
+              msg.thinking = [...(msg.thinking || []), { text: event.text }]
+              break
+            case 'citations':
+              msg.citations = (event.data || []).map((c: any) => ({ id: c.id, score: c.score, quote: c.quote, meta: c.meta || {} }))
+              break
+            case 'delta':
+              msg.content += event.data
+              break
+            case 'done':
+              msg.isStreaming = false
+              if (!currentConversationId.value && event.conversation_id) {
+                currentConversationId.value = event.conversation_id
+                conversations.value.unshift({ id: event.conversation_id, title: query.slice(0, 80), updatedAt: new Date() })
+              }
+              break
+            case 'error':
+              msg.content = `Ошибка: ${event.text}`
+              msg.isStreaming = false
+              break
+          }
+        }
       }
-      messages.value.push(assistantMsg)
     } catch (e: any) {
-      const errorMsg: ChatMessage = {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: `Ошибка: ${e?.data?.error || e?.message || 'не удалось получить ответ'}`,
-        createdAt: new Date(),
-      }
-      messages.value.push(errorMsg)
+      const msg = messages.value[msgIndex]
+      if (msg) { msg.content = `Ошибка: ${e?.message || 'не удалось получить ответ'}`; msg.isStreaming = false }
     } finally {
+      const msg = messages.value[msgIndex]
+      if (msg?.isStreaming) msg.isStreaming = false
       sending.value = false
     }
   }

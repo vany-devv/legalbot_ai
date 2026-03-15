@@ -1,26 +1,49 @@
 <template>
-  <div class="auth-page">
-    <div class="auth-card">
-      <div class="auth-brand">LegalBot</div>
-      <h1 class="auth-title">Вход в аккаунт</h1>
+  <div class="flex items-center justify-center min-h-screen bg-canvas px-6">
+    <div class="w-full max-w-[380px] flex flex-col gap-6">
 
-      <form class="auth-form" @submit.prevent="handleLogin">
-        <div class="field">
-          <label for="email">Email</label>
-          <input id="email" v-model="email" type="email" placeholder="you@example.com" required autocomplete="email" />
+      <!-- Brand -->
+      <div class="text-center">
+        <div class="inline-flex items-center justify-center w-11 h-11 rounded-xl bg-brand mb-4">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+          </svg>
         </div>
-        <div class="field">
-          <label for="password">Пароль</label>
-          <input id="password" v-model="password" type="password" placeholder="••••••••" required autocomplete="current-password" />
+        <h1 class="text-xl font-bold text-ink">Вход в LegalBot</h1>
+        <p class="text-sm text-ink-muted mt-1">Введите данные для входа в аккаунт</p>
+      </div>
+
+      <!-- Form -->
+      <form class="flex flex-col gap-4" @submit.prevent="handleLogin">
+        <div class="flex flex-col gap-1.5">
+          <label for="email" class="text-sm font-medium text-ink-muted">Email</label>
+          <input
+            id="email" v-model="email" type="email" placeholder="you@example.com"
+            required autocomplete="email"
+            class="auth-input"
+          />
         </div>
-        <div v-if="error" class="auth-error">{{ error }}</div>
-        <button type="submit" class="auth-btn" :disabled="loading">
+        <div class="flex flex-col gap-1.5">
+          <label for="password" class="text-sm font-medium text-ink-muted">Пароль</label>
+          <input
+            id="password" v-model="password" type="password" placeholder="••••••••"
+            required autocomplete="current-password"
+            class="auth-input"
+          />
+        </div>
+        <p v-if="error" class="text-sm text-danger text-center">{{ error }}</p>
+        <button
+          type="submit"
+          class="w-full py-2.5 rounded-lg bg-brand text-white text-sm font-semibold hover:bg-brand-lit transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+          :disabled="loading"
+        >
           {{ loading ? 'Вход...' : 'Войти' }}
         </button>
       </form>
 
-      <p class="auth-footer">
-        Нет аккаунта? <NuxtLink to="/auth/register" class="auth-link">Зарегистрироваться</NuxtLink>
+      <p class="text-center text-sm text-ink-muted">
+        Нет аккаунта?
+        <NuxtLink to="/auth/register" class="text-brand font-medium hover:underline">Зарегистрироваться</NuxtLink>
       </p>
     </div>
   </div>
@@ -46,87 +69,17 @@ async function handleLogin() {
 </script>
 
 <style scoped>
-.auth-page {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
-  background: var(--bg-primary);
-  padding: 24px;
-}
-.auth-card {
-  width: 100%;
-  max-width: 400px;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-.auth-brand {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--accent);
-  text-align: center;
-}
-.auth-title {
-  font-size: 24px;
-  font-weight: 600;
-  text-align: center;
-  color: var(--text-primary);
-}
-.auth-form {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.field label {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-secondary);
-}
-.field input {
-  padding: 10px 14px;
+.auth-input {
+  padding: 9px 13px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: 8px;
   background: var(--bg-input);
   color: var(--text-primary);
   font-size: 15px;
   outline: none;
   transition: border-color 0.15s;
+  width: 100%;
 }
-.field input:focus {
-  border-color: var(--accent);
-}
-.auth-error {
-  color: var(--danger);
-  font-size: 14px;
-  text-align: center;
-}
-.auth-btn {
-  padding: 11px 16px;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: var(--accent);
-  color: #fff;
-  font-size: 15px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.auth-btn:hover:not(:disabled) { background: var(--accent-hover); }
-.auth-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-.auth-footer {
-  text-align: center;
-  font-size: 14px;
-  color: var(--text-secondary);
-}
-.auth-link {
-  color: var(--accent);
-  font-weight: 500;
-}
-.auth-link:hover { text-decoration: underline; }
+.auth-input:focus { border-color: var(--accent); }
+.auth-input::placeholder { color: var(--text-tertiary); }
 </style>

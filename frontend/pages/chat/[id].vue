@@ -1,17 +1,16 @@
 <template>
-  <div class="chat-page">
-    <div class="chat-messages" ref="messagesRef">
-      <div v-if="!messages.length" class="chat-loading">
-        <p class="chat-loading-text">Загрузка диалога...</p>
+  <div class="flex flex-col h-full bg-canvas">
+    <div ref="messagesRef" class="flex-1 overflow-y-auto px-4">
+      <div v-if="!messages.length" class="flex items-center justify-center h-full">
+        <p class="text-[15px] text-ink-faint">Загрузка диалога...</p>
       </div>
-      <div v-else class="messages-list">
+      <div v-else class="max-w-[780px] mx-auto py-4 w-full">
         <ChatMessage v-for="msg in messages" :key="msg.id" :message="msg" />
-        <div v-if="sending" class="typing-indicator">
-          <div class="typing-dot" /><div class="typing-dot" /><div class="typing-dot" />
+        <div v-if="sending" class="flex gap-1 py-4 pl-11">
+          <span class="typing-dot" /><span class="typing-dot" /><span class="typing-dot" />
         </div>
       </div>
     </div>
-
     <ChatInput />
   </div>
 </template>
@@ -26,58 +25,27 @@ onMounted(() => {
   if (id) openConversation(id)
 })
 
-watch(messages, () => {
+function scrollIfNeeded(force = false) {
   nextTick(() => {
-    if (messagesRef.value) {
-      messagesRef.value.scrollTop = messagesRef.value.scrollHeight
+    const el = messagesRef.value
+    if (!el) return
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    if (force || distFromBottom < 120) {
+      el.scrollTop = el.scrollHeight
     }
   })
-}, { deep: true })
+}
+
+watch(() => messages.value.length, () => scrollIfNeeded(true))
+watch(messages, () => scrollIfNeeded(false), { deep: true })
 </script>
 
 <style scoped>
-.chat-page {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  background: var(--bg-chat);
-}
-
-.chat-messages {
-  flex: 1;
-  overflow-y: auto;
-  padding: 0 16px;
-}
-
-.chat-loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-}
-.chat-loading-text {
-  color: var(--text-tertiary);
-  font-size: 15px;
-}
-
-.messages-list {
-  max-width: 780px;
-  margin: 0 auto;
-  padding: 16px 0;
-  width: 100%;
-}
-
-.typing-indicator {
-  display: flex;
-  gap: 4px;
-  padding: 16px 0 16px 44px;
-}
 .typing-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+  width: 7px; height: 7px; border-radius: 50%;
   background: var(--text-tertiary);
   animation: typing 1.2s ease-in-out infinite;
+  display: inline-block;
 }
 .typing-dot:nth-child(2) { animation-delay: 0.15s; }
 .typing-dot:nth-child(3) { animation-delay: 0.3s; }

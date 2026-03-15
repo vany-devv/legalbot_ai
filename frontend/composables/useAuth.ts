@@ -59,8 +59,9 @@ export function useAuth() {
         headers: authHeaders(),
       })
       user.value = { id: res.ID, email: res.Email }
-    } catch {
-      logout()
+    } catch (e: any) {
+      // Only clear session on auth errors, not network issues
+      if (e?.status === 401 || e?.statusCode === 401) logout()
     }
   }
 

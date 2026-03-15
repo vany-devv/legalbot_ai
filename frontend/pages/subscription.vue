@@ -1,189 +1,77 @@
 <template>
-  <div class="sub-page">
-    <div class="sub-container">
-      <h1 class="sub-title">Тарифные планы</h1>
-      <p class="sub-subtitle">Выберите подходящий план для вашей работы</p>
+  <div class="h-full overflow-y-auto bg-canvas px-6 py-12">
+    <div class="max-w-[880px] mx-auto text-center">
+      <h1 class="text-3xl font-bold text-ink mb-2">Тарифные планы</h1>
+      <p class="text-[16px] text-ink-muted mb-10">Выберите подходящий план для вашей работы</p>
 
-      <div class="plans-grid">
-        <div class="plan-card">
-          <div class="plan-badge">Бесплатно</div>
-          <h2 class="plan-name">Базовый</h2>
-          <div class="plan-price">
-            <span class="price-amount">0 ₽</span>
-            <span class="price-period">/ мес</span>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8 text-left">
+
+        <!-- Basic -->
+        <div class="flex flex-col p-7 bg-panel border border-rim rounded-xl">
+          <p class="text-xs font-semibold uppercase tracking-wider text-ink-faint mb-3">Бесплатно</p>
+          <h2 class="text-xl font-bold text-ink mb-2">Базовый</h2>
+          <div class="mb-5">
+            <span class="text-3xl font-bold text-ink">0 ₽</span>
+            <span class="text-sm text-ink-faint"> / мес</span>
           </div>
-          <ul class="plan-features">
-            <li>10 запросов в день</li>
-            <li>Базовая модель LLM</li>
-            <li>Поиск по загруженным документам</li>
+          <ul class="flex-1 space-y-2.5 mb-6">
+            <li v-for="f in basicFeatures" :key="f" class="flex items-start gap-2 text-sm text-ink-muted">
+              <span class="text-ok font-bold flex-shrink-0 mt-0.5">✓</span> {{ f }}
+            </li>
           </ul>
-          <button class="plan-btn current" disabled>Текущий план</button>
+          <button disabled class="w-full py-2.5 rounded-lg border border-rim bg-raised text-ink-muted text-sm font-medium cursor-default">
+            Текущий план
+          </button>
         </div>
 
-        <div class="plan-card featured">
-          <div class="plan-badge accent">Популярный</div>
-          <h2 class="plan-name">Профессиональный</h2>
-          <div class="plan-price">
-            <span class="price-amount">1 990 ₽</span>
-            <span class="price-period">/ мес</span>
+        <!-- Pro (featured) -->
+        <div class="flex flex-col p-7 bg-panel border-2 border-brand rounded-xl relative">
+          <div class="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-brand text-white text-xs font-semibold rounded-full">
+            Популярный
           </div>
-          <ul class="plan-features">
-            <li>Безлимитные запросы</li>
-            <li>Продвинутая модель LLM</li>
-            <li>Приоритетная обработка</li>
-            <li>История диалогов</li>
-            <li>Экспорт ответов</li>
+          <p class="text-xs font-semibold uppercase tracking-wider text-brand mb-3">Профессиональный</p>
+          <h2 class="text-xl font-bold text-ink mb-2">Профессиональный</h2>
+          <div class="mb-5">
+            <span class="text-3xl font-bold text-ink">1 990 ₽</span>
+            <span class="text-sm text-ink-faint"> / мес</span>
+          </div>
+          <ul class="flex-1 space-y-2.5 mb-6">
+            <li v-for="f in proFeatures" :key="f" class="flex items-start gap-2 text-sm text-ink-muted">
+              <span class="text-ok font-bold flex-shrink-0 mt-0.5">✓</span> {{ f }}
+            </li>
           </ul>
-          <button class="plan-btn primary" disabled>Скоро</button>
+          <button disabled class="w-full py-2.5 rounded-lg bg-brand text-white text-sm font-semibold opacity-60 cursor-not-allowed">
+            Скоро
+          </button>
         </div>
 
-        <div class="plan-card">
-          <div class="plan-badge">Для команд</div>
-          <h2 class="plan-name">Корпоративный</h2>
-          <div class="plan-price">
-            <span class="price-amount">Договорная</span>
+        <!-- Enterprise -->
+        <div class="flex flex-col p-7 bg-panel border border-rim rounded-xl">
+          <p class="text-xs font-semibold uppercase tracking-wider text-ink-faint mb-3">Для команд</p>
+          <h2 class="text-xl font-bold text-ink mb-2">Корпоративный</h2>
+          <div class="mb-5">
+            <span class="text-2xl font-bold text-ink">Договорная</span>
           </div>
-          <ul class="plan-features">
-            <li>Всё из «Профессионального»</li>
-            <li>Выделенный сервер</li>
-            <li>Интеграция с внутренними системами</li>
-            <li>SLA и техподдержка</li>
-            <li>Обучение на ваших документах</li>
+          <ul class="flex-1 space-y-2.5 mb-6">
+            <li v-for="f in enterpriseFeatures" :key="f" class="flex items-start gap-2 text-sm text-ink-muted">
+              <span class="text-ok font-bold flex-shrink-0 mt-0.5">✓</span> {{ f }}
+            </li>
           </ul>
-          <button class="plan-btn primary" disabled>Связаться</button>
+          <button disabled class="w-full py-2.5 rounded-lg bg-brand text-white text-sm font-semibold opacity-60 cursor-not-allowed">
+            Связаться
+          </button>
         </div>
       </div>
 
-      <p class="sub-note">
+      <p class="text-sm text-ink-faint">
         Оплата временно недоступна. Функционал подписок находится в разработке.
       </p>
     </div>
   </div>
 </template>
 
-<style scoped>
-.sub-page {
-  height: 100%;
-  overflow-y: auto;
-  padding: 32px 24px;
-  background: var(--bg-chat);
-}
-.sub-container {
-  max-width: 900px;
-  margin: 0 auto;
-  text-align: center;
-}
-
-.sub-title {
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin-bottom: 8px;
-}
-.sub-subtitle {
-  font-size: 16px;
-  color: var(--text-secondary);
-  margin-bottom: 40px;
-}
-
-.plans-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 20px;
-  margin-bottom: 32px;
-}
-
-.plan-card {
-  display: flex;
-  flex-direction: column;
-  padding: 28px 24px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--bg-secondary);
-  text-align: left;
-  transition: border-color 0.2s;
-}
-.plan-card.featured {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
-}
-
-.plan-badge {
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-tertiary);
-  margin-bottom: 12px;
-}
-.plan-badge.accent { color: var(--accent); }
-
-.plan-name {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin-bottom: 8px;
-}
-
-.plan-price {
-  margin-bottom: 20px;
-}
-.price-amount {
-  font-size: 32px;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-.price-period {
-  font-size: 14px;
-  color: var(--text-tertiary);
-}
-
-.plan-features {
-  list-style: none;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 24px;
-}
-.plan-features li {
-  font-size: 14px;
-  color: var(--text-secondary);
-  padding-left: 20px;
-  position: relative;
-}
-.plan-features li::before {
-  content: '✓';
-  position: absolute;
-  left: 0;
-  color: var(--success);
-  font-weight: 600;
-}
-
-.plan-btn {
-  width: 100%;
-  padding: 10px 16px;
-  border-radius: var(--radius-sm);
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.plan-btn.current {
-  border: 1px solid var(--border);
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-  cursor: default;
-}
-.plan-btn.primary {
-  border: none;
-  background: var(--accent);
-  color: #fff;
-}
-.plan-btn.primary:disabled { opacity: 0.5; cursor: not-allowed; }
-
-.sub-note {
-  font-size: 13px;
-  color: var(--text-tertiary);
-}
-</style>
+<script setup lang="ts">
+const basicFeatures = ['10 запросов в день', 'Базовая модель LLM', 'Поиск по загруженным документам']
+const proFeatures = ['Безлимитные запросы', 'Продвинутая модель LLM', 'Приоритетная обработка', 'История диалогов', 'Экспорт ответов']
+const enterpriseFeatures = ['Всё из «Профессионального»', 'Выделенный сервер', 'Интеграция с внутренними системами', 'SLA и техподдержка', 'Обучение на ваших документах']
+</script>
