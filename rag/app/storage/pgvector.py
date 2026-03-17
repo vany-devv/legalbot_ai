@@ -209,6 +209,13 @@ def _row_to_result(row: asyncpg.Record) -> SearchResult:
 
 async def create_pool(database_url: str) -> asyncpg.Pool:
     """Create asyncpg pool with pgvector codec registered."""
+    # Ensure the extension exists before the pool tries to register the vector codec.
+    conn = await asyncpg.connect(database_url)
+    try:
+        await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
+    finally:
+        await conn.close()
+
     pool = await asyncpg.create_pool(
         database_url,
         init=register_vector,
