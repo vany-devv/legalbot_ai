@@ -54,8 +54,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      rag:
-        condition: service_healthy
     environment:
       PORT: "8080"
       DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-legalbot}?sslmode=disable
