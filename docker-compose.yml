@@ -20,9 +20,7 @@ services:
 
   # ── Python RAG service ─────────────────────────────────────────────────────
   rag:
-    build:
-      context: ./rag
-      dockerfile: Dockerfile
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/legalbot-rag:latest
     restart: unless-stopped
     depends_on:
       postgres:
@@ -51,9 +49,7 @@ services:
   # ── Go API (auth, billing, chat, orchestrator) ─────────────────────────────
   # Migrations run automatically on startup via goose (embedded in binary)
   api:
-    build:
-      context: ./api
-      dockerfile: Dockerfile
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/legalbot-api:latest
     restart: unless-stopped
     depends_on:
       postgres:
@@ -72,11 +68,7 @@ services:
 
   # ── Nuxt frontend ──────────────────────────────────────────────────────────
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        API_URL: http://api:8080
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/legalbot-frontend:latest
     restart: unless-stopped
     depends_on:
       - api
