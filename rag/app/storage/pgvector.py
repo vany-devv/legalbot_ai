@@ -208,11 +208,40 @@ def _row_to_result(row: asyncpg.Record) -> SearchResult:
 
 
 async def create_pool(database_url: str) -> asyncpg.Pool:
-    """Create asyncpg pool with pgvector codec registered."""
-    # Ensure the extension exists before the pool tries to register the vector codec.
+    """Create asyncpg pool with pgvector codec registered and schema migrated."""
     conn = await asyncpg.connect(database_url)
     try:
         await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS rag_documents (
+                id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                source_id  TEXT UNIQUE NOT NULL,
+                title      TEXT NOT NULL,
+                doc_type   TEXT NOT NULL DEFAULT 'other',
+                year       INT,
+                meta       JSONB NOT NULL DEFAULT '{}',
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+            """
+        )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS rag_chunks (
+                id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                document_id UUID NOT NULL REFERENCES rag_documents(id) ON DELETE CASCADE,
+                chunk_index INT NOT NULL,
+                content     TEXT NOT NULL,
+                embedding   vector(1024),
+                meta        JSONB NOT NULL DEFAULT '{}',
+                created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+            """
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS rag_chunks_embedding_idx ON rag_chunks USING hnsw (embedding vector_cosine_ops)"
+        )
     finally:
         await conn.close()
 
