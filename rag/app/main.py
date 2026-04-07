@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import answer, documents, ingest, search
+from app.api import analyze, answer, documents, ingest, search
 from app.dependencies import close_dependencies, get_vector_repo, init_dependencies
 
 logging.basicConfig(
@@ -45,6 +45,7 @@ app.include_router(ingest.router)
 app.include_router(documents.router)
 app.include_router(search.router)
 app.include_router(answer.router)
+app.include_router(analyze.router)
 
 
 @app.get("/health", tags=["system"])

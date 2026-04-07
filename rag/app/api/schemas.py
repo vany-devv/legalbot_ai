@@ -64,3 +64,22 @@ class AnswerRequest(BaseModel):
 class AnswerResponse(BaseModel):
     answer: str
     citations: list[CitationResponse]
+
+
+# ---------------------------------------------------------------------------
+# Analyze
+# ---------------------------------------------------------------------------
+
+class AdRisk(BaseModel):
+    fragment: str = Field(..., description="Quote from ad text that violates the law")
+    law_reference: str = Field(..., description="Article reference")
+    risk_level: str = Field(..., description="high | medium | low")
+    description: str = Field(..., description="What the violation is")
+    suggestion: str = Field(..., description="How to fix it")
+
+
+class AnalyzeResponse(BaseModel):
+    risks: list[AdRisk]
+    summary: str
+    overall_risk_level: str
+    citations: list[CitationResponse]

@@ -328,19 +328,13 @@ func (h *AskHandler) handleAskStream(w http.ResponseWriter, r *http.Request) {
 			if err := json.Unmarshal(event.Data, &cits); err == nil {
 				citations = cits
 			}
-			// Stage 2
-			writeSSE(w, flusher, map[string]any{
-				"type": "thinking",
-				"text": fmt.Sprintf("Найдено %d источников, анализирую релевантность...", len(citations)),
-			})
 			writeSSE(w, flusher, map[string]any{"type": "citations", "data": toCitationResps(citations)})
 
 		case "delta":
 			var delta string
 			if err := json.Unmarshal(event.Data, &delta); err == nil && delta != "" {
 				if firstDelta {
-					// Stage 3
-					writeSSE(w, flusher, map[string]any{"type": "thinking", "text": "Формирую ответ..."})
+					writeSSE(w, flusher, map[string]any{"type": "thinking", "text": "Анализирую источники и формирую ответ..."})
 					firstDelta = false
 				}
 				fullContent.WriteString(delta)
