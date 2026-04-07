@@ -1,0 +1,121 @@
+[
+  {
+    "filename": "Кодекс Российской Федерации от 03.06.2006 № 74-ФЗ на 03.01.2026.rtf",
+    "format": "rtf",
+    "expected_article_count": 79,
+    "expected_min_chars": 148539,
+    "notes": "проверь и скорректируй expected_article_count"
+  },
+  {
+    "filename": "Кодекс Российской Федерации от 04.12.2006 № 200-ФЗ на 03.01.2026.rtf",
+    "format": "rtf",
+    "expected_article_count": 211,
+    "expected_min_chars": 406241,
+    "notes": "проверь и скорректируй expected_article_count"
+  },
+  {
+    "filename": "Кодекс Российской Федерации от 05.08.2000 № 117-ФЗ.rtf",
+    "format": "rtf",
+    "expected_article_count": 540,
+    "expected_min_chars": 5531336,
+    "notes": "проверь и скорректируй expected_article_count"
+  },
+  {
+    "filename": "Кодекс Российской Федерации от 08.01.1997 № 1-ФЗ.rtf",
+    "format": "rtf",
+    "expected_article_count": 220,
+    "expected_min_chars": 384547,
+    "notes": "проверь и скорректируй expected_article_count"
+  },
+  {
+    "filename": "Кодекс Российской Федерации от 08.03.2015 № 21-ФЗ на 02.12.2026.rtf",
+    "format": "rtf",
+    "expected_article_count": 424,
+    "expected_min_chars": 801335,
+    "notes": "проверь и скорректируй expected_article_count"
+  },
+  {
+    "filename": "Кодекс Российской Федерации от 14.11.2002 № 138-ФЗ на 01.01.2026.rtf",
+    "format": "rtf",
+    "expected_article_count": 495,
+    "expected_min_chars": 636312,
+    "notes": "проверь и скорректируй expected_article_count"
+  },
+  {
+    "filename": "Кодекс Российской Федерации от 18.12.2001 № 174-ФЗ.rtf",
+    "format": "rtf",
+    "expected_article_count": 554,
+    "expected_min_chars": 1096762,
+    "notes": "проверь и скорректируй expected_article_count"
+  },
+  {
+    "filename": "Кодекс Российской Федерации от 18.12.2006 № 230-ФЗ на 01.04.2026.rtf",
+    "format": "rtf",
+    "expected_article_count": 334,
+    "expected_min_chars": 609549,
+    "notes": "проверь и скорректируй expected_article_count"
+  },
+  {
+    "filename": "Кодекс Российской Федерации от 26.11.2001 № 146-ФЗ.rtf",
+    "format": "rtf",
+    "expected_article_count": 123,
+    "expected_min_chars": 152613,
+    "notes": "проверь и скорректируй expected_article_count"
+  },
+  {
+    "filename": "Кодекс Российской Федерации от 28.05.2003 № 61-ФЗ на 10.01.2011.rtf",
+    "format": "rtf",
+    "expected_article_count": 0,
+    "expected_min_chars": 0,
+    "notes": "проверь и скорректируй expected_article_count"
+  },
+  {
+    "filename": "Кодекс Российской Федерации от 29.12.2004 № 188-ФЗ на 03.01.2026.rtf",
+    "format": "rtf",
+    "expected_article_count": 243,
+    "expected_min_chars": 775251,
+    "notes": "проверь и скорректируй expected_article_count"
+  },
+  {
+    "filename": "Кодекс Российской Федерации от 29.12.2004 № 190-ФЗ на 03.01.2026.rtf",
+    "format": "rtf",
+    "expected_article_count": 141,
+    "expected_min_chars": 1332169,
+    "notes": "проверь и скорректируй expected_article_count"
+  },
+  {
+    "filename": "Кодекс Российской Федерации от 30.12.2001 № 195-ФЗ.rtf",
+    "format": "rtf",
+    "expected_article_count": 1111,
+    "expected_min_chars": 2667477,
+    "notes": "проверь и скорректируй expected_article_count"
+  },
+  {
+    "filename": "Кодекс Российской Федерации от 30.12.2001 № 197-ФЗ на 03.01.2026.rtf",
+    "format": "rtf",
+    "expected_article_count": 533,
+    "expected_min_chars": 937501,
+    "notes": "проверь и скорректируй expected_article_count"
+  },
+  {
+    "filename": "Кодекс Российской Федерации от 31.07.1998 № 145-ФЗ на 01.01.2026.rtf",
+    "format": "rtf",
+    "expected_article_count": 440,
+    "expected_min_chars": 1737299,
+    "notes": "проверь и скорректируй expected_article_count"
+  },
+  {
+    "filename": "Кодекс Российской Федерации от 31.07.1998 № 146-ФЗ на 01.01.2026.rtf",
+    "format": "rtf",
+    "expected_article_count": 270,
+    "expected_min_chars": 1519147,
+    "notes": "проверь и скорректируй expected_article_count"
+  },
+  {
+    "filename": "Конституция РФ (2022).rtf",
+    "format": "mhtml",
+    "expected_article_count": 142,
+    "expected_min_chars": 131520,
+    "notes": "проверь и скорректируй expected_article_count"
+  }
+]
