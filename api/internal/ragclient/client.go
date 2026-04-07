@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"time"
 )
@@ -106,6 +107,47 @@ func (c *Client) AnswerStream(ctx context.Context, query string, topK int) (*htt
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		return nil, fmt.Errorf("RAG service returned %d: %s", resp.StatusCode, string(body))
+	}
+	return resp, nil
+}
+
+// AnalyzeStream sends ad text (and optionally a file) to POST /analyze/stream
+// as multipart/form-data and returns the raw SSE response.
+func (c *Client) AnalyzeStream(ctx context.Context, text string, fileData io.Reader, filename string, topK int) (*http.Response, error) {
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+
+	if text != "" {
+		_ = w.WriteField("text", text)
+	}
+	if fileData != nil && filename != "" {
+		part, err := w.CreateFormFile("file", filename)
+		if err != nil {
+			return nil, fmt.Errorf("create form file: %w", err)
+		}
+		if _, err := io.Copy(part, fileData); err != nil {
+			return nil, fmt.Errorf("copy file data: %w", err)
+		}
+	}
+	_ = w.WriteField("top_k", fmt.Sprintf("%d", topK))
+	w.Close()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		c.baseURL+"/analyze/stream", &buf)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	req.Header.Set("Accept", "text/event-stream")
+
+	resp, err := (&http.Client{}).Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("call RAG analyze stream: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		return nil, fmt.Errorf("RAG analyze returned %d: %s", resp.StatusCode, string(body))
 	}
 	return resp, nil
 }

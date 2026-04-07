@@ -14,8 +14,8 @@ ARTICLE_RE = re.compile(
 CHAPTER_RE = re.compile(r"^Глава\s+(\d+[\d\.\-]*)[\.\s]", re.MULTILINE | re.IGNORECASE)
 SECTION_RE = re.compile(r"^Раздел\s+([IVXLCDM\d]+)[\.\s]", re.MULTILINE | re.IGNORECASE)
 
-# Numbered paragraphs inside an article: "1.", "1.1.", "2)", "а)", "б)"
-PUNKT_RE = re.compile(r"(?m)^(?:\d+(?:\.\d+)*\.|\d+\)|[а-я]\))\s")
+# Numbered paragraphs inside an article: "1.", "1.1.", "2)", "а)", "б)", "ж1)"
+PUNKT_RE = re.compile(r"(?m)^(?:\d+(?:\.\d+)*\.|\d+\)|[а-я]\d*\))\s")
 
 
 # ---------------------------------------------------------------------------
@@ -42,6 +42,9 @@ def _normalise(text: str) -> str:
     text = re.sub(r"[ \t]{2,}(?=Статья\s+\d)", "\n", text)
     text = re.sub(r"[ \t]{2,}(?=Глава\s+\d)", "\n", text, flags=re.IGNORECASE)
     text = re.sub(r"[ \t]{2,}(?=Раздел\s+[IVXLCDM\d])", "\n", text, flags=re.IGNORECASE)
+    # Insert newlines before numbered paragraphs so PUNKT_RE can match them.
+    # Negative lookbehind for Cyrillic prevents splitting compound IDs like "ж1)".
+    text = re.sub(r"(?<!\n)(?<![а-яА-Я])(?=(?:\d+(?:\.\d+)*\.|\d+\)|[а-я]\d*\))\s)", "\n", text)
     # Collapse 3+ blank lines into 2
     text = re.sub(r"\n{3,}", "\n\n", text)
     # Remove trailing spaces on each line
@@ -56,7 +59,7 @@ def _normalise(text: str) -> str:
 class SimpleChunker:
     """Split plain text into overlapping chunks of at most `max_len` characters."""
 
-    def __init__(self, max_len: int = 1000, overlap: int = 150) -> None:
+    def __init__(self, max_len: int = 1500, overlap: int = 200) -> None:
         self.max_len = max_len
         self.overlap = overlap
 
@@ -67,11 +70,28 @@ class SimpleChunker:
         idx = 0
         while start < len(text):
             end = start + self.max_len
+            if end < len(text):
+                # Try to break at sentence boundary (". "), then at word boundary (" ")
+                candidate = text[start:end]
+                sent_break = candidate.rfind(". ")
+                if sent_break > self.max_len // 2:
+                    end = start + sent_break + 1  # include the dot
+                else:
+                    word_break = candidate.rfind(" ")
+                    if word_break > self.max_len // 2:
+                        end = start + word_break
             chunk_text = text[start:end].strip()
             if chunk_text:
                 chunks.append(Chunk(content=chunk_text, index=idx, meta=dict(meta)))
                 idx += 1
+            if end >= len(text):
+                break
             start = end - self.overlap
+            # Align overlap start to word boundary to avoid mid-word starts
+            if start > 0 and start < len(text) and text[start] != " ":
+                space_pos = text.find(" ", start)
+                if space_pos != -1 and space_pos < start + 50:
+                    start = space_pos + 1
         return chunks
 
 
@@ -93,8 +113,8 @@ class LegalDocumentChunker:
     def __init__(
         self,
         law_name: str = "",
-        max_len: int = 1000,
-        overlap: int = 150,
+        max_len: int = 1500,
+        overlap: int = 200,
     ) -> None:
         self.law_name = law_name
         self._simple = SimpleChunker(max_len=max_len, overlap=overlap)
@@ -128,6 +148,11 @@ class LegalDocumentChunker:
             article_start = match.start()
             article_end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
             article_text = text[article_start:article_end].strip()
+            # Strip trailing chapter/section headings that belong to the next structure
+            article_text = re.sub(
+                r"\n+(?:ГЛАВА|Глава|РАЗДЕЛ|Раздел)\s+.+$",
+                "", article_text, flags=re.DOTALL,
+            ).strip()
 
             base_meta = {
                 "law": self.law_name,
@@ -136,9 +161,13 @@ class LegalDocumentChunker:
                 "section": self._find_context(text, article_start, SECTION_RE),
             }
 
+            # Skip stub articles ("Исключена поправкой...")
+            if re.search(r"(?i)исключена\s+поправкой", article_text):
+                continue
+
             for sub in self._chunk_article(article_text, base_meta):
                 # Skip orphaned fragments (e.g. amendment metadata lines)
-                if len(sub.content.strip()) < 60:
+                if len(sub.content.strip()) < 80:
                     continue
                 sub.index = idx
                 chunks.append(sub)

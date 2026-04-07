@@ -1,0 +1,18 @@
+services:
+  rag:
+    build:
+      context: ./rag
+      dockerfile: Dockerfile
+    image: legalbot-rag:local
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    image: legalbot-api:local
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: legalbot-frontend:local

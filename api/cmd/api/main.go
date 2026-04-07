@@ -58,6 +58,14 @@ func main() {
 	)
 	askHandler.RegisterRoutes(mux)
 
+	// Analyze handler (POST /api/analyze/stream)
+	analyzeHandler := orchestrator.NewAnalyzeHandler(
+		ragClient,
+		billingModule.CheckLimits,
+		billingModule.RecordUsage,
+	)
+	analyzeHandler.RegisterRoutes(mux)
+
 	// Auth middleware wraps all routes
 	tokenGen := infrastructure.NewJWTTokenGenerator(cfg.JWTSecret)
 	publicPaths := []string{

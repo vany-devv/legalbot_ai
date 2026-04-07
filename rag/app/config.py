@@ -18,8 +18,8 @@ class Settings(BaseSettings):
 
     # RAG parameters
     default_top_k: int = 8
-    chunk_max_len: int = 1000
-    chunk_overlap: int = 150
+    chunk_max_len: int = 1500
+    chunk_overlap: int = 200
 
     # Embeddings — provider: "gigachat" | "yandex"
     embedding_provider: str = "yandex"
