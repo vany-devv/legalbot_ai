@@ -43,8 +43,15 @@ def _normalise(text: str) -> str:
     text = re.sub(r"[ \t]{2,}(?=Глава\s+\d)", "\n", text, flags=re.IGNORECASE)
     text = re.sub(r"[ \t]{2,}(?=Раздел\s+[IVXLCDM\d])", "\n", text, flags=re.IGNORECASE)
     # Insert newlines before numbered paragraphs so PUNKT_RE can match them.
-    # Negative lookbehind for Cyrillic prevents splitting compound IDs like "ж1)".
-    text = re.sub(r"(?<!\n)(?<![а-яА-Я])(?=(?:\d+(?:\.\d+)*\.|\d+\)|[а-я]\d*\))\s)", "\n", text)
+    # Negative lookbehinds:
+    #   - Cyrillic letter: prevents splitting compound IDs like "ж1)"
+    #   - digit / dot: prevents splitting inside multi-part numbers like "15.1."
+    #   - "Статья ", "Глава ", "Раздел ": prevents breaking structural headers
+    text = re.sub(
+        r"(?<!\n)(?<![а-яА-Я])(?<!\d)(?<!\.)(?<!Статья )(?<!Глава )(?<!Раздел )"
+        r"(?=(?:\d+(?:\.\d+)*\.|\d+\)|[а-я]\d*\))\s)",
+        "\n", text,
+    )
     # Collapse 3+ blank lines into 2
     text = re.sub(r"\n{3,}", "\n\n", text)
     # Remove trailing spaces on each line
