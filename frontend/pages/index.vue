@@ -4,11 +4,7 @@
 
       <!-- Welcome screen -->
       <div v-if="!messages.length" class="flex flex-col items-center justify-center h-full gap-5 py-12 text-center">
-        <div class="w-16 h-16 rounded-2xl bg-brand-dim border border-brand/20 flex items-center justify-center">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
-          </svg>
-        </div>
+        <img src="/favicon.svg" width="64" height="64" alt="LegalBot AI" class="rounded-2xl" />
         <div>
           <h1 class="text-2xl font-bold text-ink mb-1.5">LegalBot AI</h1>
           <p class="text-[15px] text-ink-muted max-w-sm">Юридический ассистент</p>
@@ -38,6 +34,8 @@
 </template>
 
 <script setup lang="ts">
+useHead({ title: 'Чат' })
+
 const { messages, sending, send, newChat } = useChat()
 const messagesRef = ref<HTMLElement | null>(null)
 

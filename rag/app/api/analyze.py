@@ -33,6 +33,8 @@ async def _classify_ad(llm: LLMProvider, ad_text: str) -> dict:
     user_msg = AD_CLASSIFY_USER_TEMPLATE.format(ad_snippet=snippet)
     try:
         raw = await llm.complete(system=AD_CLASSIFY_SYSTEM_PROMPT, user=user_msg)
+        logger.info("[CLASSIFY] LLM raw output:\n%s", raw)
+
         result = _parse_json(raw)
 
         # Validate and sanitize target_articles
@@ -53,7 +55,12 @@ async def _classify_ad(llm: LLMProvider, ad_text: str) -> dict:
         result["target_articles"] = valid_articles
 
         if result.get("search_queries") or result.get("checklist"):
-            logger.debug("Ad classified as: %s, articles: %s", result.get("category"), valid_articles)
+            logger.info(
+                "[CLASSIFY] category=%r  articles=%s  checklist_items=%d",
+                result.get("category"),
+                valid_articles,
+                len(result.get("checklist", [])),
+            )
             return result
 
     except Exception as exc:
@@ -214,11 +221,26 @@ async def analyze(
         supplementary_context=supplementary_ctx,
     )
 
+    logger.info(
+        "[ANALYZE] mandatory_articles=%d  supplementary_articles=%d",
+        len({(r.meta.get("law"), r.meta.get("article")) for r in mandatory}),
+        len({(r.meta.get("law"), r.meta.get("article")) for r in supplementary}),
+    )
+
     raw = await llm.complete(system=AD_ANALYSIS_SYSTEM_PROMPT, user=user_msg)
+    logger.info("[ANALYZE] LLM raw output:\n%s", raw)
+
     parsed = _parse_json(raw)
+    risks = parsed.get("risks", [])
+    logger.info(
+        "[ANALYZE] result: overall=%s  risks=%d  -> %s",
+        parsed.get("overall_risk_level"),
+        len(risks),
+        [r.get("law_reference") for r in risks],
+    )
 
     return AnalyzeResponse(
-        risks=parsed.get("risks", []),
+        risks=risks,
         summary=parsed.get("summary", raw),
         overall_risk_level=parsed.get("overall_risk_level", "unknown"),
         citations=_build_all_citations(mandatory, supplementary),
@@ -253,6 +275,12 @@ async def analyze_stream(
         yield _event({"type": "thinking", "text": f"Загружено {total} статей. Анализирую на соответствие..."})
 
         mandatory_ctx, supplementary_ctx = _build_structured_context(mandatory, supplementary)
+        logger.info(
+            "[ANALYZE] mandatory_articles=%d  supplementary_articles=%d",
+            len({(r.meta.get("law"), r.meta.get("article")) for r in mandatory}),
+            len({(r.meta.get("law"), r.meta.get("article")) for r in supplementary}),
+        )
+
         checklist_str = _format_checklist(classification.get("checklist", []))
         user_msg = AD_ANALYSIS_USER_TEMPLATE.format(
             category=category,
@@ -264,7 +292,16 @@ async def analyze_stream(
         )
 
         raw = await llm.complete(system=AD_ANALYSIS_SYSTEM_PROMPT, user=user_msg)
+        logger.info("[ANALYZE] LLM raw output:\n%s", raw)
+
         parsed = _parse_json(raw)
+        risks = parsed.get("risks", [])
+        logger.info(
+            "[ANALYZE] result: overall=%s  risks=%d  -> %s",
+            parsed.get("overall_risk_level"),
+            len(risks),
+            [r.get("law_reference") for r in risks],
+        )
 
         yield _event({"type": "result", "data": parsed})
 

@@ -136,6 +136,8 @@
 </template>
 
 <script setup lang="ts">
+useHead({ title: 'Администрирование' })
+
 const config = useRuntimeConfig()
 const api = config.public.apiBase
 const { authHeaders } = useAuth()

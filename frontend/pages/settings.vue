@@ -98,6 +98,8 @@
 </template>
 
 <script setup lang="ts">
+useHead({ title: 'Настройки' })
+
 const { theme, toggle } = useTheme()
 const { user, isLoggedIn, logout } = useAuth()
 const router = useRouter()

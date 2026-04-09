@@ -144,6 +144,8 @@
 </template>
 
 <script setup lang="ts">
+useHead({ title: 'Анализ рекламы' })
+
 const { thinking, citations, result, analyzing, error, analyze, reset } = useAnalyze()
 
 const inputText = ref('')

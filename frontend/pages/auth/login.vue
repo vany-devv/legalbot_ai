@@ -4,10 +4,8 @@
 
       <!-- Brand -->
       <div class="text-center">
-        <div class="inline-flex items-center justify-center w-11 h-11 rounded-xl bg-brand mb-4">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
-          </svg>
+        <div class="inline-flex items-center justify-center w-11 h-11 rounded-xl mb-4">
+          <img src="/favicon.svg" width="44" height="44" alt="LegalBot AI" />
         </div>
         <h1 class="text-xl font-bold text-ink">Вход в LegalBot</h1>
         <p class="text-sm text-ink-muted mt-1">Введите данные для входа в аккаунт</p>
@@ -50,6 +48,8 @@
 </template>
 
 <script setup lang="ts">
+useHead({ title: 'Вход' })
+
 const { login, loading } = useAuth()
 const router = useRouter()
 
