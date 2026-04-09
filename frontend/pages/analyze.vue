@@ -139,19 +139,12 @@
         </div>
       </template>
 
-      <!-- Streaming content (before JSON is parsed) -->
-      <div
-        v-else-if="analyzing && streamContent"
-        class="bg-panel border border-rim rounded-xl p-5"
-      >
-        <p class="text-[13px] leading-[1.7] text-ink-muted whitespace-pre-wrap">{{ streamContent }}</p>
-      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-const { streamContent, thinking, citations, result, analyzing, error, analyze, reset } = useAnalyze()
+const { thinking, citations, result, analyzing, error, analyze, reset } = useAnalyze()
 
 const inputText = ref('')
 const uploadFile = ref<File | null>(null)

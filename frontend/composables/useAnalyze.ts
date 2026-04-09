@@ -14,7 +14,6 @@ export interface AnalyzeResult {
   overall_risk_level: string
 }
 
-const streamContent = ref('')
 const thinking = ref<ThinkingStep[]>([])
 const citations = ref<Citation[]>([])
 const result = ref<AnalyzeResult | null>(null)
@@ -27,7 +26,6 @@ export function useAnalyze() {
   const { authHeaders } = useAuth()
 
   function reset() {
-    streamContent.value = ''
     thinking.value = []
     citations.value = []
     result.value = null
@@ -80,6 +78,9 @@ export function useAnalyze() {
             case 'thinking':
               thinking.value = [...thinking.value, { text: event.text }]
               break
+            case 'result':
+              result.value = event.data as AnalyzeResult
+              break
             case 'citations':
               citations.value = (event.data || []).map((c: any) => ({
                 id: c.chunk_id,
@@ -88,20 +89,12 @@ export function useAnalyze() {
                 meta: c.meta || {},
               }))
               break
-            case 'delta':
-              streamContent.value += event.data
-              break
-            case 'done':
-              break
             case 'error':
               error.value = event.text
               break
           }
         }
       }
-
-      // Try parsing the streamed content as JSON
-      result.value = parseAnalysisJson(streamContent.value)
     } catch (e: any) {
       error.value = e?.message || 'Не удалось выполнить анализ'
     } finally {
@@ -110,7 +103,6 @@ export function useAnalyze() {
   }
 
   return {
-    streamContent: readonly(streamContent),
     thinking: readonly(thinking),
     citations: readonly(citations),
     result: readonly(result),
@@ -121,27 +113,3 @@ export function useAnalyze() {
   }
 }
 
-function parseAnalysisJson(raw: string): AnalyzeResult | null {
-  let text = raw.trim()
-  // Strip markdown code block
-  if (text.startsWith('```')) {
-    const firstNewline = text.indexOf('\n')
-    if (firstNewline !== -1) text = text.slice(firstNewline + 1)
-    if (text.endsWith('```')) text = text.slice(0, -3)
-    text = text.trim()
-  }
-
-  try {
-    return JSON.parse(text) as AnalyzeResult
-  } catch {
-    // Try to find JSON object in text
-    const start = text.indexOf('{')
-    const end = text.lastIndexOf('}')
-    if (start !== -1 && end > start) {
-      try {
-        return JSON.parse(text.slice(start, end + 1)) as AnalyzeResult
-      } catch { /* fallthrough */ }
-    }
-  }
-  return null
-}
