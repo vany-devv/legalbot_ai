@@ -19,7 +19,7 @@
     <!-- Body -->
     <div class="px-3 py-3 space-y-2.5">
       <!-- Fragment quote -->
-      <blockquote class="border-l-2 pl-3 text-[13px] leading-[1.6] text-ink-muted italic" :class="quoteClass">
+      <blockquote v-if="hasFragment" class="border-l-2 pl-3 text-[13px] leading-[1.6] text-ink-muted italic" :class="quoteClass">
         &laquo;{{ risk.fragment }}&raquo;
       </blockquote>
 
@@ -41,6 +41,11 @@
 import type { AdRisk } from '~/composables/useAnalyze'
 
 const props = defineProps<{ risk: AdRisk }>()
+
+const hasFragment = computed(() => {
+  const f = props.risk.fragment?.trim()
+  return f && f !== '[отсутствует в материале]'
+})
 
 const riskLabel = computed(() => {
   switch (props.risk.risk_level) {

@@ -166,6 +166,45 @@ class VectorRepository:
             )
         return [_row_to_result(r) for r in rows]
 
+    async def fetch_by_articles(self, article_refs: list[dict]) -> list[SearchResult]:
+        """Direct lookup: fetch chunks by (law number, article number) pairs.
+
+        article_refs format: [{"law": "156", "article": "51"}, ...]
+        Uses LIKE '%<number>%' to match stored law names like "ФЗ 156 ФЗ 29 11 2001".
+        Returns chunks ordered by law, article, chunk_index (preserves article text order).
+        Score is set to 1.0 so these chunks always rank above retrieval results.
+        """
+        if not article_refs:
+            return []
+
+        conditions = []
+        params: list[str] = []
+        for i, ref in enumerate(article_refs):
+            law_param = i * 2 + 1
+            art_param = i * 2 + 2
+            conditions.append(
+                f"(rc.meta->>'law' LIKE '%' || ${law_param} || '%' "
+                f"AND rc.meta->>'article' = ${art_param})"
+            )
+            params.extend([str(ref["law"]), str(ref["article"])])
+
+        where_clause = " OR ".join(conditions)
+        query = f"""
+            SELECT
+                rc.id::text          AS chunk_id,
+                rc.document_id::text AS document_id,
+                rc.content,
+                rc.meta,
+                1.0                  AS score
+            FROM rag_chunks rc
+            WHERE {where_clause}
+            ORDER BY rc.meta->>'law', rc.meta->>'article', rc.chunk_index
+        """
+
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(query, *params)
+        return [_row_to_result(r) for r in rows]
+
     # ------------------------------------------------------------------
     # Stats
     # ------------------------------------------------------------------

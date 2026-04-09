@@ -40,6 +40,17 @@ def _citations(results: list[SearchResult]) -> list[CitationResponse]:
     ]
 
 
+def _dedup_citations(results: list[SearchResult]) -> list[CitationResponse]:
+    """Return one citation per (law, article) — highest score wins."""
+    best: dict[tuple, SearchResult] = {}
+    for r in results:
+        key = (r.meta.get("law", r.document_id), r.meta.get("article", ""))
+        if key not in best or r.score > best[key].score:
+            best[key] = r
+    deduped = sorted(best.values(), key=lambda r: r.score, reverse=True)
+    return _citations(deduped)
+
+
 def _filter_used_citations(
     answer_text: str, citations: list[CitationResponse],
 ) -> list[CitationResponse]:
