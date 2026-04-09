@@ -16,6 +16,8 @@
 </template>
 
 <script setup lang="ts">
+useHead({ title: 'Чат' })
+
 const route = useRoute()
 const { messages, sending, openConversation } = useChat()
 const messagesRef = ref<HTMLElement | null>(null)

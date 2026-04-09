@@ -13,6 +13,10 @@ const { init } = useTheme()
 const { init: initAuth } = useAuth()
 const { init: initSidebar } = useSidebar()
 
+useHead({
+  titleTemplate: (title) => title ? `LegalBot AI | ${title}` : 'LegalBot AI',
+})
+
 onMounted(() => {
   init()
   initAuth()

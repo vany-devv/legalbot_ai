@@ -1,7 +1,7 @@
 <template>
   <aside
-    class="flex flex-col h-screen bg-sidebar border-r border-rim flex-shrink-0 overflow-hidden transition-[width] duration-250 ease-in-out"
-    :class="sidebarOpen ? 'w-[260px]' : 'w-[52px]'"
+    class="flex flex-col h-screen bg-sidebar border-r border-rim flex-shrink-0 overflow-hidden"
+    :class="[sidebarOpen ? 'w-[260px]' : 'w-[52px]', sidebarReady ? 'transition-[width] duration-250 ease-in-out' : '']"
   >
 
     <!-- ── Header ─────────────────────────────────────── -->
@@ -10,55 +10,61 @@
       <!-- Logo row -->
       <div class="flex items-center h-9 gap-1.5 px-1">
 
-        <!-- Logo: becomes toggle button when collapsed -->
+        <!-- Collapsed: sidebar expand icon -->
         <button
-          class="flex items-center justify-center rounded-lg flex-shrink-0 transition-all duration-200 cursor-pointer"
-          :class="sidebarOpen
-            ? 'w-7 h-7 bg-brand pointer-events-none'
-            : 'w-9 h-9 bg-brand hover:bg-brand-lit active:scale-95'"
-          :title="sidebarOpen ? undefined : 'Развернуть'"
-          @click="!sidebarOpen && toggle()"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
-          </svg>
-        </button>
-
-        <!-- App name: fades + collapses -->
-        <span
-          class="flex-1 text-sm font-semibold text-ink whitespace-nowrap overflow-hidden transition-[opacity,max-width] duration-200"
-          :class="sidebarOpen ? 'opacity-100 max-w-[160px]' : 'opacity-0 max-w-0'"
-        >
-          LegalBot AI
-        </span>
-
-        <!-- Toggle button: 36×36, only when open -->
-        <button
-          class="flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-lg text-ink-faint hover:text-ink hover:bg-dimmed transition-[opacity,colors] duration-150 cursor-pointer"
-          :class="sidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'"
-          title="Свернуть"
+          v-if="!sidebarOpen"
+          class="w-9 h-9 flex items-center justify-center rounded-lg text-ink-faint hover:text-ink hover:bg-dimmed transition-colors cursor-pointer flex-shrink-0"
+          title="Развернуть"
           @click="toggle"
         >
           <svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
             <rect x="1.5" y="1.5" width="13" height="13" rx="2"/>
-            <line x1="5.5" y1="1.5" x2="5.5" y2="14.5"/>
-            <line x1="8" y1="5.5" x2="12" y2="5.5"/>
-            <line x1="8" y1="8" x2="12" y2="8"/>
-            <line x1="8" y1="10.5" x2="12" y2="10.5"/>
+            <line x1="10.5" y1="1.5" x2="10.5" y2="14.5"/>
+            <line x1="4" y1="5.5" x2="8.5" y2="5.5"/>
+            <line x1="4" y1="8" x2="8.5" y2="8"/>
+            <line x1="4" y1="10.5" x2="8.5" y2="10.5"/>
           </svg>
         </button>
+
+        <!-- Open: logo + app name + collapse button -->
+        <template v-else>
+          <img src="/favicon.svg" width="22" height="22" alt="LegalBot AI" class="flex-shrink-0 rounded-md" />
+
+          <span class="flex-1 text-sm font-semibold text-ink whitespace-nowrap overflow-hidden">
+            LegalBot AI
+          </span>
+
+          <button
+            class="flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-lg text-ink-faint hover:text-ink hover:bg-dimmed transition-colors cursor-pointer"
+            title="Свернуть"
+            @click="toggle"
+          >
+            <svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="1.5" y="1.5" width="13" height="13" rx="2"/>
+              <line x1="5.5" y1="1.5" x2="5.5" y2="14.5"/>
+              <line x1="8" y1="5.5" x2="12" y2="5.5"/>
+              <line x1="8" y1="8" x2="12" y2="8"/>
+              <line x1="8" y1="10.5" x2="12" y2="10.5"/>
+            </svg>
+          </button>
+        </template>
       </div>
 
       <!-- New Chat button -->
       <button
-        class="flex items-center justify-center gap-2 w-full h-9 rounded-lg text-sm font-medium transition-all duration-[250ms] ease-in-out cursor-pointer overflow-hidden"
+        class="relative flex items-center w-full h-9 rounded-lg text-sm font-medium transition-colors duration-[250ms] ease-in-out cursor-pointer overflow-hidden"
         :class="sidebarOpen
-          ? 'px-3 border border-rim bg-panel text-ink hover:bg-dimmed'
+          ? 'pl-10 pr-3 border border-rim bg-panel text-ink hover:bg-dimmed'
           : 'border border-transparent text-ink-faint hover:text-ink hover:bg-dimmed'"
         title="Новый чат"
         @click="handleNewChat"
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0">
+        <!-- Icon absolutely positioned so it never shifts during sidebar animation -->
+        <svg
+          width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+          class="absolute left-[14px] top-1/2 -translate-y-1/2"
+        >
           <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
         </svg>
         <span class="sidebar-label" :class="sidebarOpen ? 'label-show' : 'label-hide'">
@@ -182,7 +188,7 @@
 <script setup lang="ts">
 const { conversations, currentConversationId, newChat, loadConversations } = useChat()
 const { user, isLoggedIn, logout, init } = useAuth()
-const { sidebarOpen, toggle } = useSidebar()
+const { sidebarOpen, sidebarReady, toggle } = useSidebar()
 const { theme, toggle: toggleTheme } = useTheme()
 const router = useRouter()
 
