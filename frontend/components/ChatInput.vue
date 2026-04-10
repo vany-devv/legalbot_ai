@@ -1,10 +1,10 @@
 <template>
   <div class="px-4 pb-4 max-w-[780px] mx-auto w-full">
-    <div class="input-wrap flex items-center gap-2 px-4 py-2.5 bg-field border border-rim rounded-2xl transition-colors">
+    <div class="input-wrap flex items-center gap-2 px-4 py-3 bg-field border border-rim rounded-2xl transition-colors">
       <textarea
         ref="textareaRef"
         v-model="text"
-        class="flex-1 bg-transparent text-ink text-[15px] leading-relaxed resize-none outline-none max-h-[200px] placeholder-ink-faint"
+        class="flex-1 bg-transparent text-ink text-base leading-relaxed resize-none outline-none max-h-[200px] placeholder-ink-faint"
         placeholder="Задайте юридический вопрос..."
         rows="1"
         @keydown.enter.exact.prevent="handleSend"

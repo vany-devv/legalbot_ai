@@ -1,8 +1,8 @@
 <template>
   <div class="h-full overflow-y-auto bg-canvas px-6 py-8">
     <div class="max-w-[840px] mx-auto flex flex-col gap-6">
-      <h1 class="text-[22px] font-semibold text-ink">Анализ рекламных материалов</h1>
-      <p class="text-[14px] text-ink-muted -mt-3">
+      <h1 class="text-2xl font-bold text-ink">Анализ рекламных материалов</h1>
+      <p class="text-[15px] text-ink-muted -mt-2">
         Загрузите рекламный текст или файл для проверки на соответствие законодательству РФ
       </p>
 
@@ -11,11 +11,11 @@
 
         <!-- Text input -->
         <div class="flex flex-col gap-1.5">
-          <label class="text-[13px] font-medium text-ink-muted">Рекламный текст</label>
+          <label class="text-sm font-medium text-ink-muted">Рекламный текст</label>
           <textarea
             v-model="inputText"
             rows="6"
-            class="w-full bg-field border border-rim rounded-lg px-3 py-2.5 text-[14px] text-ink placeholder:text-ink-faint resize-y focus:outline-none focus:border-brand transition-colors"
+            class="w-full bg-field border border-rim rounded-lg px-3 py-2.5 text-sm text-ink placeholder:text-ink-faint resize-y focus:outline-none focus:border-brand transition-colors"
             placeholder="Вставьте текст рекламного материала..."
             :disabled="analyzing"
           />
@@ -46,7 +46,7 @@
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-ok">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
             </svg>
-            <span class="font-medium text-[13px]">{{ uploadFile.name }}</span>
+            <span class="font-medium text-sm">{{ uploadFile.name }}</span>
             <button class="text-xs text-danger hover:underline" @click.stop="uploadFile = null">Удалить</button>
           </template>
           <template v-else>
@@ -59,7 +59,7 @@
 
         <!-- Submit -->
         <button
-          class="self-end px-5 py-2.5 rounded-lg text-[14px] font-medium transition-all cursor-pointer"
+          class="self-end px-5 py-2.5 rounded-lg text-sm font-semibold transition-all cursor-pointer"
           :class="canSubmit
             ? 'bg-brand text-white hover:bg-brand-lit'
             : 'bg-raised text-ink-faint cursor-not-allowed'"
@@ -94,7 +94,7 @@
         <!-- Overall summary -->
         <div class="bg-panel border border-rim rounded-xl p-5 flex flex-col gap-3">
           <div class="flex items-center gap-2.5">
-            <span class="text-[15px] font-semibold text-ink">Результат анализа</span>
+            <span class="text-base font-semibold text-ink">Результат анализа</span>
             <span
               class="text-[11px] font-bold uppercase px-2 py-0.5 rounded"
               :class="overallBadgeClass"
@@ -102,12 +102,12 @@
               {{ overallLabel }}
             </span>
           </div>
-          <p class="text-[14px] leading-[1.7] text-ink-muted">{{ result.summary }}</p>
+          <p class="text-sm leading-relaxed text-ink-muted">{{ result.summary }}</p>
         </div>
 
         <!-- Risks -->
         <div v-if="result.risks?.length" class="flex flex-col gap-3">
-          <h2 class="text-[15px] font-semibold text-ink">
+          <h2 class="text-base font-semibold text-ink">
             Выявленные риски ({{ result.risks.length }})
           </h2>
           <RiskCard v-for="(risk, i) in result.risks" :key="i" :risk="risk" />
