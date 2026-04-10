@@ -3,11 +3,11 @@
     <div ref="messagesRef" class="flex-1 overflow-y-auto px-4">
 
       <!-- Welcome screen -->
-      <div v-if="!messages.length" class="flex flex-col items-center justify-center h-full gap-5 py-12 text-center">
-        <img src="/favicon.svg" width="64" height="64" alt="LegalBot AI" class="rounded-2xl" />
-        <div>
-          <h1 class="text-2xl font-bold text-ink mb-1.5">LegalBot AI</h1>
-          <p class="text-[15px] text-ink-muted max-w-sm">Юридический ассистент</p>
+      <div v-if="!messages.length" class="flex flex-col items-center justify-center h-full gap-6 py-12 text-center">
+        <img src="/favicon.svg" width="80" height="80" alt="LegalBot" class="rounded-2xl" />
+        <div class="flex flex-col gap-1.5">
+          <h1 class="text-3xl font-bold text-ink">LegalBot</h1>
+          <p class="text-base text-ink-muted max-w-sm">Юридический ассистент по законодательству РФ</p>
         </div>
         <div class="flex flex-wrap justify-center gap-2 mt-1 max-w-lg">
           <button
