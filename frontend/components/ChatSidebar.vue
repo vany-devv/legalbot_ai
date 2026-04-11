@@ -3,18 +3,13 @@
     class="flex flex-col h-screen bg-sidebar border-r border-rim flex-shrink-0 overflow-hidden"
     :class="[sidebarOpen ? 'w-[260px]' : 'w-[52px]', sidebarReady ? 'transition-[width] duration-250 ease-in-out' : '']"
   >
-
-    <!-- ── Header ─────────────────────────────────────── -->
     <div class="px-2 pt-2 pb-2 flex-shrink-0 space-y-0.5">
-
-      <!-- Logo row: pure CSS transitions, zero v-show/v-if — no flicker -->
       <div
         class="flex items-center h-9 px-[10px] rounded-lg overflow-hidden transition-colors"
         :class="!sidebarOpen ? 'cursor-pointer text-ink-faint hover:text-ink hover:bg-dimmed' : 'text-ink'"
         :title="!sidebarOpen ? 'Развернуть' : ''"
         @click="!sidebarOpen && toggle()"
       >
-        <!-- Expand icon: visible when COLLAPSED (inverted show/hide) -->
         <button
           class="sidebar-label flex-shrink-0 flex items-center justify-center cursor-pointer"
           :class="!sidebarOpen ? 'label-show' : 'label-hide'"
@@ -30,7 +25,6 @@
           </svg>
         </button>
 
-        <!-- "LegalBot [logo]" group: visible when EXPANDED -->
         <div
           class="sidebar-label flex items-center gap-1.5 flex-1 min-w-0"
           :class="sidebarOpen ? 'label-show' : 'label-hide'"
@@ -39,7 +33,6 @@
           <img src="/favicon.svg" width="20" height="20" alt="LegalBot" class="flex-shrink-0 rounded" />
         </div>
 
-        <!-- Collapse button: visible when EXPANDED -->
         <button
           class="sidebar-label flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-ink-faint hover:text-ink hover:bg-dimmed transition-colors cursor-pointer"
           :class="sidebarOpen ? 'label-show' : 'label-hide'"
@@ -56,7 +49,6 @@
         </button>
       </div>
 
-      <!-- New Chat: identical structure to nav items — no class toggling on box-model props -->
       <button class="sidebar-nav-item w-full mt-1" title="Новый чат" @click="handleNewChat">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
           stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0">
@@ -66,12 +58,10 @@
       </button>
     </div>
 
-    <!-- ── Conversations list ────────────────────────── -->
     <div
       class="flex-1 overflow-y-auto px-2 py-1 transition-opacity duration-150"
       :class="sidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'"
     >
-      <!-- "No dialogs" hint: nav-item structure so it collapses the same way -->
       <div v-if="!conversations.length" class="sidebar-nav-item cursor-default opacity-60 pointer-events-none">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0 opacity-60">
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
@@ -98,9 +88,7 @@
       </div>
     </div>
 
-    <!-- ── Bottom nav ──────────────────────────────── -->
     <div class="px-2 pb-3 pt-2 border-t border-rim space-y-0.5 flex-shrink-0">
-
       <NuxtLink to="/admin" class="sidebar-nav-item" active-class="sidebar-nav-active">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
@@ -129,7 +117,6 @@
         <span class="sidebar-label" :class="sidebarOpen ? 'label-show' : 'label-hide'">Подписка</span>
       </NuxtLink>
 
-      <!-- Theme toggle -->
       <button class="sidebar-nav-item w-full" :title="theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'" @click="toggleTheme">
         <svg v-if="theme === 'dark'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0">
           <circle cx="12" cy="12" r="5"/>
@@ -146,7 +133,6 @@
         </span>
       </button>
 
-      <!-- User row -->
       <div class="pt-1 mt-1 border-t border-rim">
         <template v-if="isLoggedIn">
           <div class="sidebar-nav-item cursor-default">
@@ -220,8 +206,8 @@ function handleOpen(id: string) {
   background: var(--bg-secondary);
 }
 
-/* Labels: only opacity transitions. max-width has NO transition so layout
-   collapses instantly on hide — zero reflow during the sidebar width animation. */
+/* max-width has no transition — layout collapses instantly on hide,
+   preventing reflow during the sidebar width animation. */
 .sidebar-label {
   white-space: nowrap;
   overflow: hidden;
@@ -229,13 +215,11 @@ function handleOpen(id: string) {
 .label-show {
   opacity: 1;
   max-width: 200px;
-  /* no delay — cross-fade with outgoing elements works cleanly */
   transition: opacity 0.18s ease;
 }
 .label-hide {
   opacity: 0;
   max-width: 0;
-  /* instant layout collapse, fast opacity fade */
   transition: opacity 0.1s ease;
 }
 </style>
