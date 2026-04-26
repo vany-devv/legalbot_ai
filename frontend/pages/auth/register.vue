@@ -61,6 +61,12 @@
               </svg>
             </button>
           </div>
+          <div v-if="password" class="mt-1 flex items-center gap-2">
+            <div class="flex-1 h-1 rounded-full bg-rim overflow-hidden">
+              <div class="h-full rounded-full transition-all duration-300" :class="strengthBarClass" :style="{ width: strengthPercent + '%' }" />
+            </div>
+            <span class="text-xs whitespace-nowrap" :class="strengthTextClass">{{ strengthLabel }}</span>
+          </div>
         </div>
         <div class="flex flex-col gap-2">
           <label for="confirm" class="text-sm font-medium text-ink-muted">Подтвердите пароль</label>
@@ -120,6 +126,26 @@ const confirm = ref('')
 const error = ref('')
 const showPassword = ref(false)
 const showConfirm = ref(false)
+
+function getPasswordStrength(pw: string): number {
+  if (!pw) return 0
+  if (pw.length < 6) return 1
+  let score = 0
+  if (pw.length >= 8) score++
+  if (pw.length >= 10) score++
+  if (/[a-z]/.test(pw) && /[A-Z]/.test(pw)) score++
+  if (/\d/.test(pw)) score++
+  if (/[^a-zA-Z0-9]/.test(pw)) score++
+  if (score <= 1) return 2
+  if (score <= 3) return 3
+  return 4
+}
+
+const strength = computed(() => getPasswordStrength(password.value))
+const strengthLabel = computed(() => ['', 'Ненадежный', 'Слабый', 'Средний', 'Надежный'][strength.value])
+const strengthBarClass = computed(() => ['', 'bg-danger', 'bg-danger', 'bg-warning', 'bg-ok'][strength.value])
+const strengthTextClass = computed(() => ['', 'text-danger', 'text-danger', 'text-warning', 'text-ok'][strength.value])
+const strengthPercent = computed(() => [0, 25, 50, 75, 100][strength.value])
 
 async function handleRegister() {
   error.value = ''

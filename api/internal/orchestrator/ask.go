@@ -10,6 +10,8 @@ import (
 
 	"github.com/google/uuid"
 
+	authdomain "legalbot/services/internal/auth/domain"
+	authuc "legalbot/services/internal/auth/usecase"
 	billinguc "legalbot/services/internal/billing/usecase"
 	chatuc "legalbot/services/internal/chat/usecase"
 	"legalbot/services/internal/middleware"
@@ -22,6 +24,7 @@ type AskHandler struct {
 	recordUsage *billinguc.RecordUsageUseCase
 	createConv  *chatuc.CreateConversationUseCase
 	saveMessage *chatuc.SaveMessageUseCase
+	userRepo    authdomain.UserRepository
 }
 
 func NewAskHandler(
@@ -30,6 +33,7 @@ func NewAskHandler(
 	recordUsage *billinguc.RecordUsageUseCase,
 	createConv *chatuc.CreateConversationUseCase,
 	saveMessage *chatuc.SaveMessageUseCase,
+	userRepo authdomain.UserRepository,
 ) *AskHandler {
 	return &AskHandler{
 		ragClient:   ragClient,
@@ -37,6 +41,7 @@ func NewAskHandler(
 		recordUsage: recordUsage,
 		createConv:  createConv,
 		saveMessage: saveMessage,
+		userRepo:    userRepo,
 	}
 }
 
@@ -84,6 +89,9 @@ func toCitationResps(cits []ragclient.Citation) []citationResp {
 	return out
 }
 
+// checkBilling возвращает true если запрос можно пропустить (в пределах лимита либо admin).
+// Лениво проверяет admin-роль только когда лимит исчерпан — обычные юзеры в пределах
+// лимита не делают лишнего FindByID.
 func (h *AskHandler) checkBilling(r *http.Request, userUUID uuid.UUID) bool {
 	limitsResp, err := h.checkLimits.Execute(r.Context(), billinguc.CheckLimitsRequest{
 		UserID:       userUUID,
@@ -94,7 +102,11 @@ func (h *AskHandler) checkBilling(r *http.Request, userUUID uuid.UUID) bool {
 		log.Printf("[ask] check_limits error: %v", err)
 		return true
 	}
-	return limitsResp.Allowed || limitsResp.Reason == "no active subscription"
+	if limitsResp.Allowed {
+		return true
+	}
+	// Лимит не позволяет — последний шанс для админа
+	return authuc.IsAdmin(r.Context(), h.userRepo, userUUID)
 }
 
 func (h *AskHandler) ensureConversation(r *http.Request, userUUID uuid.UUID, query, convIDStr string) uuid.UUID {

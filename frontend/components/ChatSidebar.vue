@@ -89,7 +89,7 @@
     </div>
 
     <div class="px-2 pb-3 pt-2 border-t border-rim space-y-0.5 flex-shrink-0">
-      <NuxtLink to="/admin" class="sidebar-nav-item" active-class="sidebar-nav-active">
+      <NuxtLink v-if="isAdmin" to="/admin" class="sidebar-nav-item" active-class="sidebar-nav-active">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
         </svg>
@@ -117,7 +117,7 @@
         <span class="sidebar-label" :class="sidebarOpen ? 'label-show' : 'label-hide'">Подписка</span>
       </NuxtLink>
 
-      <button class="sidebar-nav-item w-full" :title="theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'" @click="toggleTheme">
+      <button class="sidebar-nav-item w-full" :title="theme === 'dark' ? 'Светлая тема' : 'Темная тема'" @click="toggleTheme">
         <svg v-if="theme === 'dark'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0">
           <circle cx="12" cy="12" r="5"/>
           <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
@@ -129,7 +129,7 @@
           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
         </svg>
         <span class="sidebar-label" :class="sidebarOpen ? 'label-show' : 'label-hide'">
-          {{ theme === 'dark' ? 'Светлая тема' : 'Тёмная тема' }}
+          {{ theme === 'dark' ? 'Светлая тема' : 'Темная тема' }}
         </span>
       </button>
 
@@ -164,7 +164,7 @@
 
 <script setup lang="ts">
 const { conversations, currentConversationId, newChat, loadConversations } = useChat()
-const { user, isLoggedIn, logout, init } = useAuth()
+const { user, isLoggedIn, isAdmin, logout, init } = useAuth()
 const { sidebarOpen, sidebarReady, toggle } = useSidebar()
 const { theme, toggle: toggleTheme } = useTheme()
 const router = useRouter()

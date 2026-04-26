@@ -4,6 +4,7 @@
     <main class="main-area">
       <NuxtPage />
     </main>
+    <ToastContainer />
   </div>
 </template>
 
@@ -50,6 +51,7 @@ const showSidebar = computed(() => !authRoutes.includes(route.path))
   --accent-hover:      #818cf8;
   --accent-subtle:     rgba(99, 102, 241, 0.15);
   --danger:            #ef4444;
+  --warning:           #f59e0b;
   --success:           #22c55e;
   --shadow:            0 1px 3px rgba(0, 0, 0, 0.4);
   --radius-sm:         8px;
@@ -79,6 +81,7 @@ const showSidebar = computed(() => !authRoutes.includes(route.path))
   --accent-hover:      #4338ca;
   --accent-subtle:     rgba(79, 70, 229, 0.1);
   --danger:            #dc2626;
+  --warning:           #d97706;
   --success:           #16a34a;
   --shadow:            0 1px 3px rgba(0, 0, 0, 0.08);
   --radius-sm:         8px;

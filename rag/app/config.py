@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     gigachat_model: str = "GigaChat-Pro"
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
+    alice_model: str = "aliceai-llm/latest"
 
     # Database
     database_url: str = "postgresql://postgres:postgres@localhost:5432/legalbot"

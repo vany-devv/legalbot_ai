@@ -12,6 +12,8 @@ import (
 
 	"github.com/google/uuid"
 
+	authdomain "legalbot/services/internal/auth/domain"
+	authuc "legalbot/services/internal/auth/usecase"
 	billinguc "legalbot/services/internal/billing/usecase"
 	"legalbot/services/internal/middleware"
 	"legalbot/services/internal/ragclient"
@@ -21,17 +23,20 @@ type AnalyzeHandler struct {
 	ragClient   *ragclient.Client
 	checkLimits *billinguc.CheckLimitsUseCase
 	recordUsage *billinguc.RecordUsageUseCase
+	userRepo    authdomain.UserRepository
 }
 
 func NewAnalyzeHandler(
 	ragClient *ragclient.Client,
 	checkLimits *billinguc.CheckLimitsUseCase,
 	recordUsage *billinguc.RecordUsageUseCase,
+	userRepo authdomain.UserRepository,
 ) *AnalyzeHandler {
 	return &AnalyzeHandler{
 		ragClient:   ragClient,
 		checkLimits: checkLimits,
 		recordUsage: recordUsage,
+		userRepo:    userRepo,
 	}
 }
 
@@ -62,8 +67,11 @@ func (h *AnalyzeHandler) handleAnalyzeStream(w http.ResponseWriter, r *http.Requ
 		if err != nil {
 			log.Printf("[analyze] check_limits error: %v", err)
 		} else if !limitsResp.Allowed {
-			http.Error(w, "limit exceeded", http.StatusPaymentRequired)
-			return
+			// Лимит исчерпан — последний шанс для админа (ленивый lookup)
+			if !authuc.IsAdmin(ctx, h.userRepo, parsed) {
+				http.Error(w, "limit exceeded", http.StatusPaymentRequired)
+				return
+			}
 		}
 	}
 

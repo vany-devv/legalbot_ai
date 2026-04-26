@@ -64,7 +64,16 @@
             </button>
           </div>
         </div>
-        <p v-if="error" class="text-sm text-danger text-center">{{ error }}</p>
+        <div class="flex items-center justify-between">
+          <p v-if="error" class="text-sm text-danger">{{ error }}</p>
+          <button
+            type="button"
+            class="text-sm text-ink-muted hover:text-brand transition-colors cursor-pointer ml-auto"
+            @click="onForgotPassword"
+          >
+            Забыли пароль?
+          </button>
+        </div>
         <button
           type="submit"
           class="w-full py-3 rounded-lg bg-brand text-white text-sm font-semibold hover:bg-brand-lit transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed mt-1"
@@ -86,12 +95,17 @@
 useHead({ title: 'Вход' })
 
 const { login, loading } = useAuth()
+const { show: showToast } = useToast()
 const router = useRouter()
 
 const email = ref('')
 const password = ref('')
 const error = ref('')
 const showPassword = ref(false)
+
+function onForgotPassword() {
+  showToast('Для восстановления пароля обратитесь к администратору', 'info')
+}
 
 async function handleLogin() {
   error.value = ''

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -43,15 +44,16 @@ type LoginResponse struct {
 }
 
 func (uc *LoginUseCase) Execute(ctx context.Context, req LoginRequest) (*LoginResponse, error) {
-	// Поиск пользователя
+	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
+
 	user, err := uc.userRepo.FindByEmail(ctx, req.Email)
 	if err != nil {
-		return nil, errors.New("invalid credentials")
+		return nil, errors.New("invalid email or password")
 	}
 
 	// Проверка пароля
 	if err := uc.passwordHasher.Compare(user.PasswordHash, req.Password); err != nil {
-		return nil, errors.New("invalid credentials")
+		return nil, errors.New("invalid email or password")
 	}
 
 	// Генерация токена

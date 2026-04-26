@@ -64,7 +64,7 @@ def _filter_used_citations(
 
     # 2. Parse article numbers: "ст. 37", "статье 309", etc.
     mentioned_articles: set[str] = set()
-    for m in re.finditer(r"(?:стать[яеиюёй]\w*|ст\.)\s*(\d+[\d.\-]*)", answer_lower):
+    for m in re.finditer(r"(?:стать[яеиюей]\w*|ст\.)\s*(\d+[\d.\-]*)", answer_lower):
         mentioned_articles.add(m.group(1).rstrip("."))
 
     used = []
