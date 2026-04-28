@@ -28,20 +28,26 @@ func (r *PostgresUsageRepository) Create(ctx context.Context, usage *domain.Usag
 }
 
 func (r *PostgresUsageRepository) GetByUserAndPeriod(ctx context.Context, userID uuid.UUID, resourceType string, start, end time.Time) (*domain.Usage, error) {
+	// Increment пишет period как [date_trunc('month', NOW()), +1 month).
+	// Старая проверка `period_start >= start AND period_end <= end` со start = NOW()-1mo, end = NOW()
+	// никогда не сходилась (period_end всегда в будущем) → метод молча возвращал nil.
+	// Ищем запись, чей полуинтервал покрывает момент `end` — это и есть текущий период.
 	query := `
 		SELECT id, user_id, resource_type, count, period_start, period_end, created_at
 		FROM usage
-		WHERE user_id = $1 AND resource_type = $2 AND period_start >= $3 AND period_end <= $4
+		WHERE user_id = $1 AND resource_type = $2
+		  AND period_start <= $3 AND period_end > $3
 		ORDER BY created_at DESC
 		LIMIT 1
 	`
 	usage := &domain.Usage{}
-	err := r.db.QueryRowContext(ctx, query, userID, resourceType, start, end).Scan(
+	err := r.db.QueryRowContext(ctx, query, userID, resourceType, end).Scan(
 		&usage.ID, &usage.UserID, &usage.ResourceType, &usage.Count, &usage.PeriodStart, &usage.PeriodEnd, &usage.CreatedAt,
 	)
 	if err == sql.ErrNoRows {
-		return nil, nil // нет использования - это нормально
+		return nil, nil
 	}
+	_ = start // параметр оставлен для совместимости интерфейса
 	return usage, err
 }
 

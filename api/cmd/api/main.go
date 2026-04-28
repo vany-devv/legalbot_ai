@@ -33,19 +33,22 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	// Domain modules
-	authHandler := auth.Wire(database.DB, cfg.JWTSecret)
-	authHandler.RegisterRoutes(mux)
-
+	// Domain modules.
+	// Billing должен инициализироваться раньше auth — auth.Wire требует
+	// PlanRepo/SubscriptionRepo для авто-подписки на Free при регистрации.
 	billingModule := billing.Wire(database.DB)
 	billingModule.Handler.RegisterRoutes(mux)
+
+	authModule := auth.Wire(database.DB, cfg.JWTSecret, billingModule.PlanRepo, billingModule.SubscriptionRepo)
+	authModule.Handler.RegisterRoutes(mux)
 
 	chatModule := chat.Wire(database.DB)
 	chatModule.Handler.RegisterRoutes(mux)
 
-	// RAG proxy (ingest, search, health -> Python)
+	// RAG proxy: публичные роуты (search, health) и admin-only (ingest, documents).
 	ragProxy := proxy.NewRAGProxy(cfg.RAGServiceURL, cfg.IngestAPIKey)
-	ragProxy.RegisterRoutes(mux)
+	ragProxy.RegisterPublicRoutes(mux)
+	ragProxy.RegisterAdminRoutes(mux, middleware.RequireAdmin(authModule.UserRepo))
 
 	// Orchestrator (POST /api/chat/ask)
 	ragClient := ragclient.New(cfg.RAGServiceURL)
@@ -55,6 +58,7 @@ func main() {
 		billingModule.RecordUsage,
 		chatModule.CreateConversation,
 		chatModule.SaveMessage,
+		authModule.UserRepo,
 	)
 	askHandler.RegisterRoutes(mux)
 
@@ -63,6 +67,7 @@ func main() {
 		ragClient,
 		billingModule.CheckLimits,
 		billingModule.RecordUsage,
+		authModule.UserRepo,
 	)
 	analyzeHandler.RegisterRoutes(mux)
 

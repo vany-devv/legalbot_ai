@@ -20,7 +20,7 @@ services:
 
   # ── Python RAG service ─────────────────────────────────────────────────────
   rag:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/legalbot-rag:latest
+    image: legalbot-rag:local
     restart: unless-stopped
     depends_on:
       postgres:
@@ -33,6 +33,7 @@ services:
       GIGACHAT_MODEL: ${GIGACHAT_MODEL:-GigaChat-Pro}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      ALICE_MODEL: ${ALICE_MODEL:-aliceai-llm/latest}
       INGEST_API_KEY: ${INGEST_API_KEY:-}
       EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-yandex}
       YANDEX_FOLDER_ID: ${YANDEX_FOLDER_ID:-}

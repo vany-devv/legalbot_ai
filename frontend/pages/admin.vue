@@ -102,7 +102,7 @@
               <th class="text-left px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-ink-faint border-b border-rim">Название</th>
               <th class="text-left px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-ink-faint border-b border-rim">Тип</th>
               <th class="text-left px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-ink-faint border-b border-rim">Чанков</th>
-              <th class="text-left px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-ink-faint border-b border-rim">Обновлён</th>
+              <th class="text-left px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-ink-faint border-b border-rim">Обновлен</th>
               <th class="border-b border-rim" />
             </tr>
           </thead>
@@ -136,6 +136,7 @@
 </template>
 
 <script setup lang="ts">
+definePageMeta({ middleware: 'admin' })
 useHead({ title: 'Администрирование' })
 
 const config = useRuntimeConfig()

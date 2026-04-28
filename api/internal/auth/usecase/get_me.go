@@ -27,6 +27,7 @@ func NewGetMeUseCase(
 type GetMeResponse struct {
 	ID    uuid.UUID
 	Email string
+	Role  string
 }
 
 func (uc *GetMeUseCase) Execute(ctx context.Context, token string) (*GetMeResponse, error) {
@@ -50,6 +51,7 @@ func (uc *GetMeUseCase) Execute(ctx context.Context, token string) (*GetMeRespon
 	return &GetMeResponse{
 		ID:    user.ID,
 		Email: user.Email,
+		Role:  user.Role,
 	}, nil
 }
 

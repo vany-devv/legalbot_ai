@@ -52,6 +52,11 @@ export function useAnalyze() {
         body: formData,
       })
 
+      if (response.status === 402) {
+        useToast().show('Лимит запросов исчерпан. Обновите подписку.', 'error', 6000)
+        error.value = 'Лимит запросов исчерпан'
+        return
+      }
       if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`)
 
       const reader = response.body.getReader()
@@ -99,6 +104,7 @@ export function useAnalyze() {
       error.value = e?.message || 'Не удалось выполнить анализ'
     } finally {
       analyzing.value = false
+      useBilling().refresh()
     }
   }
 

@@ -1,7 +1,7 @@
 <template>
   <button
     class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-ink-muted hover:bg-panel hover:text-ink transition-colors w-full cursor-pointer"
-    :title="theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'"
+    :title="theme === 'dark' ? 'Светлая тема' : 'Темная тема'"
     @click="toggle"
   >
     <svg v-if="theme === 'dark'" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -14,7 +14,7 @@
     <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
     </svg>
-    {{ theme === 'dark' ? 'Светлая тема' : 'Тёмная тема' }}
+    {{ theme === 'dark' ? 'Светлая тема' : 'Темная тема' }}
   </button>
 </template>
 

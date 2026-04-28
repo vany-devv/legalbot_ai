@@ -52,8 +52,8 @@ func (uc *CheckLimitsUseCase) Execute(ctx context.Context, req CheckLimitsReques
 		}, nil
 	}
 
-	// Проверка срока действия
-	if time.Now().After(subscription.ExpiresAt) {
+	// Проверка срока действия (nil = бесконечная подписка, например Free)
+	if subscription.ExpiresAt != nil && time.Now().After(*subscription.ExpiresAt) {
 		return &CheckLimitsResponse{
 			Allowed: false,
 			Reason:  "subscription expired",

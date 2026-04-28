@@ -24,4 +24,13 @@ def get_llm_provider(settings: Settings) -> LLMProvider:
             model=settings.openai_model,
         )
 
-    raise ValueError(f"Unknown LLM provider: {provider!r}. Supported: gigachat, openai")
+    if provider == "alice":
+        from app.llm.alice_provider import AliceProvider
+
+        return AliceProvider(
+            api_key=settings.yandex_api_key,
+            folder_id=settings.yandex_folder_id,
+            model=settings.alice_model,
+        )
+
+    raise ValueError(f"Unknown LLM provider: {provider!r}. Supported: gigachat, openai, alice")

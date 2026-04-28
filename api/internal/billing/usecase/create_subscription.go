@@ -37,7 +37,7 @@ type CreateSubscriptionResponse struct {
 	SubscriptionID uuid.UUID
 	PlanID         uuid.UUID
 	Status         string
-	ExpiresAt      time.Time
+	ExpiresAt      *time.Time
 }
 
 func (uc *CreateSubscriptionUseCase) Execute(ctx context.Context, req CreateSubscriptionRequest) (*CreateSubscriptionResponse, error) {
@@ -60,13 +60,14 @@ func (uc *CreateSubscriptionUseCase) Execute(ctx context.Context, req CreateSubs
 
 	// Создание подписки
 	now := time.Now()
+	expiresAt := now.AddDate(0, 1, 0) // 1 месяц
 	subscription := &domain.Subscription{
 		ID:        uuid.New(),
 		UserID:    req.UserID,
 		PlanID:    req.PlanID,
 		Status:    "pending", // станет active после подтверждения платежа
 		StartedAt: now,
-		ExpiresAt: now.AddDate(0, 1, 0), // 1 месяц
+		ExpiresAt: &expiresAt,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}

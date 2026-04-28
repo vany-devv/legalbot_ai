@@ -29,10 +29,29 @@ func NewRAGProxy(rawURL string, ingestAPIKey string) *RAGProxy {
 	return &RAGProxy{proxy: proxy}
 }
 
-func (p *RAGProxy) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/rag/", p.handle)
+// Handler возвращает базовый прокси-handler — main.go сам решает, какие префиксы
+// открыть публично, а какие обернуть в RequireAdmin.
+func (p *RAGProxy) Handler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p.proxy.ServeHTTP(w, r)
+	})
 }
 
-func (p *RAGProxy) handle(w http.ResponseWriter, r *http.Request) {
-	p.proxy.ServeHTTP(w, r)
+// RegisterPublicRoutes ставит на mux маршруты, доступные любому залогиненному юзеру:
+// поиск и health.
+func (p *RAGProxy) RegisterPublicRoutes(mux *http.ServeMux) {
+	h := p.Handler()
+	mux.Handle("/api/rag/search", h)
+	mux.Handle("/api/rag/health", h)
+}
+
+// RegisterAdminRoutes ставит admin-only маршруты: ingest и управление документами.
+// Вызывающий должен обернуть handler в admin-middleware.
+// Префиксы с trailing slash покрывают sub-paths (например /ingest/upload, /documents/{id}).
+func (p *RAGProxy) RegisterAdminRoutes(mux *http.ServeMux, wrap func(http.Handler) http.Handler) {
+	h := wrap(p.Handler())
+	mux.Handle("/api/rag/ingest", h)
+	mux.Handle("/api/rag/ingest/", h)
+	mux.Handle("/api/rag/documents", h)
+	mux.Handle("/api/rag/documents/", h)
 }

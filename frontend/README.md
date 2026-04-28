@@ -54,6 +54,6 @@ components/
 composables/
   useChat.ts         — стейт диалогов, SSE стриминг
   useAuth.ts         — JWT авторизация
-  useTheme.ts        — тёмная/светлая тема
+  useTheme.ts        — темная/светлая тема
   useSidebar.ts      — состояние сайдбара
 ```

@@ -10,6 +10,7 @@ import (
 // PlanRepository определяет интерфейс для работы с тарифами
 type PlanRepository interface {
 	FindByID(ctx context.Context, id uuid.UUID) (*Plan, error)
+	FindBySlug(ctx context.Context, slug string) (*Plan, error)
 	FindAll(ctx context.Context) ([]*Plan, error)
 }
 

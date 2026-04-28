@@ -32,6 +32,7 @@ export default {
         'brand-dim': 'var(--accent-subtle)',
         // Status
         danger:  'var(--danger)',
+        warning: 'var(--warning)',
         ok:      'var(--success)',
       },
       fontFamily: {

@@ -108,6 +108,12 @@ export function useChat() {
         body: JSON.stringify(body),
       })
 
+      if (response.status === 402) {
+        useToast().show('Лимит запросов исчерпан. Обновите подписку.', 'error', 6000)
+        const msg = messages.value[msgIndex]
+        if (msg) { msg.content = 'Лимит запросов исчерпан'; msg.isStreaming = false }
+        return
+      }
       if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`)
 
       const reader = response.body.getReader()
@@ -164,6 +170,7 @@ export function useChat() {
       const msg = messages.value[msgIndex]
       if (msg?.isStreaming) msg.isStreaming = false
       sending.value = false
+      useBilling().refresh()
     }
   }
 

@@ -16,7 +16,7 @@ app/
     documents.py     — список и удаление документов
   core/
     embeddings.py    — GigaChat + Yandex embeddings API
-    chunking.py      — чанкинг с учётом структуры НПА (статьи, главы)
+    chunking.py      — чанкинг с учетом структуры НПА (статьи, главы)
     retrieval.py     — гибридный поиск: dense + FTS + RRF
   llm/
     base.py          — абстрактный LLMProvider

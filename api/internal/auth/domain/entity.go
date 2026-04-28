@@ -6,11 +6,17 @@ import (
 	"github.com/google/uuid"
 )
 
+const (
+	RoleUser  = "user"
+	RoleAdmin = "admin"
+)
+
 // User представляет пользователя системы
 type User struct {
 	ID           uuid.UUID
 	Email        string
 	PasswordHash string
+	Role         string
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }

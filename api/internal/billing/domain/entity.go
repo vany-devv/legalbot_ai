@@ -9,6 +9,7 @@ import (
 // Plan представляет тарифный план
 type Plan struct {
 	ID          uuid.UUID
+	Slug        string
 	Name        string
 	Price       int64 // в копейках
 	MaxRequests int   // лимит запросов в месяц
@@ -22,9 +23,9 @@ type Subscription struct {
 	ID        uuid.UUID
 	UserID    uuid.UUID
 	PlanID    uuid.UUID
-	Status    string // active, cancelled, expired
+	Status    string     // active, cancelled, expired
 	StartedAt time.Time
-	ExpiresAt time.Time
+	ExpiresAt *time.Time // nil = бесконечная подписка (Free)
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
