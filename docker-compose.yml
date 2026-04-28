@@ -20,7 +20,7 @@ services:
 
   # ── Python RAG service ─────────────────────────────────────────────────────
   rag:
-    image: legalbot-rag:local
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/legalbot-rag:latest
     restart: unless-stopped
     depends_on:
       postgres:
