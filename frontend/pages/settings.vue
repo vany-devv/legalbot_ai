@@ -94,8 +94,27 @@
 
           <!-- Change password -->
           <div class="py-3">
-            <p class="text-[15px] font-medium text-ink mb-3">Смена пароля</p>
-            <form class="flex flex-col gap-3 max-w-[360px]" @submit.prevent="handleChangePassword">
+            <div class="flex items-center justify-between gap-4">
+              <div>
+                <p class="text-[15px] font-medium text-ink">Пароль</p>
+                <p class="text-sm text-ink-muted">Изменить пароль от аккаунта</p>
+              </div>
+              <button
+                v-if="!showPasswordForm"
+                class="px-4 py-2 rounded-lg border border-rim text-sm text-ink hover:bg-dimmed transition-colors cursor-pointer"
+                @click="showPasswordForm = true"
+              >
+                Сменить пароль
+              </button>
+              <button
+                v-else
+                class="px-4 py-2 rounded-lg border border-rim text-sm text-ink-muted hover:bg-dimmed transition-colors cursor-pointer"
+                @click="cancelPasswordChange"
+              >
+                Отмена
+              </button>
+            </div>
+            <form v-if="showPasswordForm" class="flex flex-col gap-3 max-w-[360px] mt-4" @submit.prevent="handleChangePassword">
               <div class="relative">
                 <input
                   v-model="currentPassword"
@@ -153,7 +172,7 @@
                 class="self-start px-4 py-2 rounded-lg bg-brand text-white text-sm font-medium hover:bg-brand-lit transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                 :disabled="pwLoading"
               >
-                {{ pwLoading ? 'Сохранение...' : 'Сменить пароль' }}
+                {{ pwLoading ? 'Сохранение...' : 'Сохранить' }}
               </button>
             </form>
           </div>
@@ -213,6 +232,7 @@ onMounted(() => {
   if (isLoggedIn.value) refreshBilling()
 })
 
+const showPasswordForm = ref(false)
 const currentPassword = ref('')
 const newPassword = ref('')
 const confirmPassword = ref('')
@@ -222,6 +242,18 @@ const showConfirmPw = ref(false)
 const pwError = ref('')
 const pwSuccess = ref('')
 const pwLoading = ref(false)
+
+function cancelPasswordChange() {
+  showPasswordForm.value = false
+  currentPassword.value = ''
+  newPassword.value = ''
+  confirmPassword.value = ''
+  showCurrent.value = false
+  showNew.value = false
+  showConfirmPw.value = false
+  pwError.value = ''
+  pwSuccess.value = ''
+}
 
 function getPasswordStrength(pw: string): number {
   if (!pw) return 0
