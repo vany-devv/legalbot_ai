@@ -12,6 +12,7 @@ type Module struct {
 	Handler            *handler.ChatHandler
 	CreateConversation *usecase.CreateConversationUseCase
 	SaveMessage        *usecase.SaveMessageUseCase
+	ConversationRepo   *repository.PostgresConversationRepository
 }
 
 func Wire(db *sql.DB) *Module {
@@ -20,7 +21,7 @@ func Wire(db *sql.DB) *Module {
 	citationRepo := repository.NewPostgresCitationRepository(db)
 
 	createConversationUC := usecase.NewCreateConversationUseCase(conversationRepo)
-	saveMessageUC := usecase.NewSaveMessageUseCase(messageRepo, citationRepo)
+	saveMessageUC := usecase.NewSaveMessageUseCase(conversationRepo, messageRepo, citationRepo)
 	getConversationUC := usecase.NewGetConversationUseCase(conversationRepo, messageRepo, citationRepo)
 	listConversationsUC := usecase.NewListConversationsUseCase(conversationRepo)
 
@@ -28,11 +29,6 @@ func Wire(db *sql.DB) *Module {
 		Handler:            handler.NewChatHandler(createConversationUC, saveMessageUC, getConversationUC, listConversationsUC),
 		CreateConversation: createConversationUC,
 		SaveMessage:        saveMessageUC,
+		ConversationRepo:   conversationRepo,
 	}
 }
-
-
-
-
-
-

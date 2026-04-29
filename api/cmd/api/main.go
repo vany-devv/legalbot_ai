@@ -58,6 +58,7 @@ func main() {
 		billingModule.RecordUsage,
 		chatModule.CreateConversation,
 		chatModule.SaveMessage,
+		chatModule.ConversationRepo,
 		authModule.UserRepo,
 	)
 	askHandler.RegisterRoutes(mux)
@@ -76,8 +77,9 @@ func main() {
 	publicPaths := []string{
 		"/api/auth/register",
 		"/api/auth/login",
+		"/api/rag/health",
 	}
-	handler := middleware.Auth(mux, tokenGen, publicPaths)
+	handler := middleware.Auth(mux, tokenGen, authModule.SessionRepo, publicPaths)
 
 	log.Printf("Server starting on :%s (RAG service: %s)\n", cfg.Port, cfg.RAGServiceURL)
 	if err := http.ListenAndServe(":"+cfg.Port, handler); err != nil {

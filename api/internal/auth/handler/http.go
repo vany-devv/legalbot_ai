@@ -15,6 +15,7 @@ type AuthHandler struct {
 	loginUseCase          *usecase.LoginUseCase
 	getMeUseCase          *usecase.GetMeUseCase
 	changePasswordUseCase *usecase.ChangePasswordUseCase
+	logoutUseCase         *usecase.LogoutUseCase
 }
 
 func NewAuthHandler(
@@ -22,12 +23,14 @@ func NewAuthHandler(
 	loginUseCase *usecase.LoginUseCase,
 	getMeUseCase *usecase.GetMeUseCase,
 	changePasswordUseCase *usecase.ChangePasswordUseCase,
+	logoutUseCase *usecase.LogoutUseCase,
 ) *AuthHandler {
 	return &AuthHandler{
 		registerUseCase:       registerUseCase,
 		loginUseCase:          loginUseCase,
 		getMeUseCase:          getMeUseCase,
 		changePasswordUseCase: changePasswordUseCase,
+		logoutUseCase:         logoutUseCase,
 	}
 }
 
@@ -36,6 +39,7 @@ func (h *AuthHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/auth/login", h.handleLogin)
 	mux.HandleFunc("/api/auth/me", h.handleMe)
 	mux.HandleFunc("/api/auth/password", h.handleChangePassword)
+	mux.HandleFunc("/api/auth/logout", h.handleLogout)
 }
 
 func (h *AuthHandler) handleRegister(w http.ResponseWriter, r *http.Request) {
@@ -149,3 +153,28 @@ func (h *AuthHandler) handleMe(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
+func (h *AuthHandler) handleLogout(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		http.Error(w, "Authorization header required", http.StatusUnauthorized)
+		return
+	}
+
+	token := strings.TrimPrefix(authHeader, "Bearer ")
+	if token == authHeader {
+		http.Error(w, "Invalid authorization format", http.StatusUnauthorized)
+		return
+	}
+
+	if err := h.logoutUseCase.Execute(r.Context(), token); err != nil {
+		http.Error(w, "Invalid session", http.StatusUnauthorized)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}

@@ -13,7 +13,7 @@ const loading = ref(false)
 export function useBilling() {
   const config = useRuntimeConfig()
   const api = config.public.apiBase
-  const { authHeaders, isLoggedIn } = useAuth()
+  const { authHeaders, isLoggedIn, handleUnauthorized } = useAuth()
 
   async function refresh() {
     if (!isLoggedIn.value) {
@@ -25,7 +25,10 @@ export function useBilling() {
       billing.value = await $fetch<BillingInfo>(`${api}/billing/me`, {
         headers: authHeaders(),
       })
-    } catch {
+    } catch (e: any) {
+      if (e?.status === 401 || e?.statusCode === 401) {
+        await handleUnauthorized()
+      }
       billing.value = null
     } finally {
       loading.value = false

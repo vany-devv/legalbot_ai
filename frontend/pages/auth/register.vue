@@ -119,6 +119,7 @@ useHead({ title: 'Регистрация' })
 
 const { register, loading } = useAuth()
 const router = useRouter()
+const route = useRoute()
 
 const email = ref('')
 const password = ref('')
@@ -159,7 +160,7 @@ async function handleRegister() {
   }
   try {
     await register(email.value, password.value)
-    router.push('/')
+    router.replace(useAuth().resolvePostAuthRedirect(route.query.next))
   } catch (e: any) {
     error.value = e?.data || e?.message || 'Ошибка регистрации'
   }

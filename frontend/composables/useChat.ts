@@ -40,7 +40,7 @@ const sending = ref(false)
 export function useChat() {
   const config = useRuntimeConfig()
   const api = config.public.apiBase
-  const { authHeaders } = useAuth()
+  const { authHeaders, handleUnauthorized } = useAuth()
 
   function newChat() {
     currentConversationId.value = null
@@ -59,7 +59,11 @@ export function useChat() {
       if (!headers.Authorization) return
       const res = await $fetch<Array<{ id: string; title: string; updated_at: string }>>(`${api}/chat/conversations`, { headers })
       conversations.value = (res || []).map(c => ({ id: c.id, title: c.title, updatedAt: new Date(c.updated_at) }))
-    } catch { /* silently fail */ }
+    } catch (e: any) {
+      if (e?.status === 401 || e?.statusCode === 401) {
+        await handleUnauthorized()
+      }
+    }
   }
 
   async function loadMessages(conversationId: string) {
@@ -85,7 +89,11 @@ export function useChat() {
         confidence: m.Metadata?.confidence,
         createdAt: new Date(m.CreatedAt),
       }))
-    } catch { /* silently fail */ }
+    } catch (e: any) {
+      if (e?.status === 401 || e?.statusCode === 401) {
+        await handleUnauthorized()
+      }
+    }
   }
 
   async function send(query: string, topK = 6) {
@@ -113,6 +121,10 @@ export function useChat() {
         const msg = messages.value[msgIndex]
         if (msg) { msg.content = 'Лимит запросов исчерпан'; msg.isStreaming = false }
         return
+      }
+      if (response.status === 401) {
+        await handleUnauthorized()
+        throw new Error('Требуется авторизация')
       }
       if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`)
 

@@ -80,9 +80,74 @@ defineProps<{ message: ChatMessage }>()
 
 const citationsOpen = ref(false)
 
+const renderer = new marked.Renderer()
+
+renderer.image = ({ text }) => escapeHtml(text || '')
+
+function isSafeUrl(url: string): boolean {
+  const normalized = url.trim().toLowerCase()
+  return normalized.startsWith('http://')
+    || normalized.startsWith('https://')
+    || normalized.startsWith('mailto:')
+    || normalized.startsWith('tel:')
+}
+
+renderer.link = ({ href, title, tokens }) => {
+  const text = tokens.map(token => 'raw' in token ? token.raw : '').join('') || href
+  if (!href || !isSafeUrl(href)) return escapeHtml(text)
+  const safeHref = escapeAttribute(href)
+  const safeTitle = title ? ` title="${escapeAttribute(title)}"` : ''
+  return `<a href="${safeHref}"${safeTitle} target="_blank" rel="noopener noreferrer nofollow">${escapeHtml(text)}</a>`
+}
+
 function formatContent(text: string): string {
-  const html = marked.parse(text, { async: false }) as string
-  return html.replace(/<table/g, '<div class="table-wrap"><table').replace(/<\/table>/g, '</table></div>')
+  const escaped = escapeHtml(text)
+  const rendered = marked.parse(escaped, { async: false, renderer }) as string
+  const html = rendered.replace(/<table/g, '<div class="table-wrap"><table').replace(/<\/table>/g, '</table></div>')
+  return sanitizeGeneratedHtml(html)
+}
+
+function sanitizeGeneratedHtml(html: string): string {
+  if (typeof DOMParser === 'undefined') {
+    return html.replace(/<img\b[^>]*>/gi, '').replace(/href\s*=\s*"javascript:[^"]*"/gi, '')
+  }
+
+  const doc = new DOMParser().parseFromString(html, 'text/html')
+  for (const element of Array.from(doc.body.querySelectorAll('*'))) {
+    for (const attr of Array.from(element.attributes)) {
+      if (attr.name.toLowerCase().startsWith('on')) element.removeAttribute(attr.name)
+    }
+
+    if (element.tagName === 'IMG') {
+      element.replaceWith(doc.createTextNode(element.getAttribute('alt') || ''))
+      continue
+    }
+
+    if (element.tagName === 'A') {
+      const href = element.getAttribute('href') || ''
+      if (!isSafeUrl(href)) {
+        element.replaceWith(doc.createTextNode(element.textContent || ''))
+        continue
+      }
+      element.setAttribute('target', '_blank')
+      element.setAttribute('rel', 'noopener noreferrer nofollow')
+    }
+  }
+
+  return doc.body.innerHTML
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
+function escapeAttribute(value: string): string {
+  return escapeHtml(value)
 }
 </script>
 

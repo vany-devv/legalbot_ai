@@ -13,18 +13,20 @@ import (
 	authdomain "legalbot/services/internal/auth/domain"
 	authuc "legalbot/services/internal/auth/usecase"
 	billinguc "legalbot/services/internal/billing/usecase"
+	chatdomain "legalbot/services/internal/chat/domain"
 	chatuc "legalbot/services/internal/chat/usecase"
 	"legalbot/services/internal/middleware"
 	"legalbot/services/internal/ragclient"
 )
 
 type AskHandler struct {
-	ragClient   *ragclient.Client
-	checkLimits *billinguc.CheckLimitsUseCase
-	recordUsage *billinguc.RecordUsageUseCase
-	createConv  *chatuc.CreateConversationUseCase
-	saveMessage *chatuc.SaveMessageUseCase
-	userRepo    authdomain.UserRepository
+	ragClient        *ragclient.Client
+	checkLimits      *billinguc.CheckLimitsUseCase
+	recordUsage      *billinguc.RecordUsageUseCase
+	createConv       *chatuc.CreateConversationUseCase
+	saveMessage      *chatuc.SaveMessageUseCase
+	conversationRepo chatdomain.ConversationRepository
+	userRepo         authdomain.UserRepository
 }
 
 func NewAskHandler(
@@ -33,15 +35,17 @@ func NewAskHandler(
 	recordUsage *billinguc.RecordUsageUseCase,
 	createConv *chatuc.CreateConversationUseCase,
 	saveMessage *chatuc.SaveMessageUseCase,
+	conversationRepo chatdomain.ConversationRepository,
 	userRepo authdomain.UserRepository,
 ) *AskHandler {
 	return &AskHandler{
-		ragClient:   ragClient,
-		checkLimits: checkLimits,
-		recordUsage: recordUsage,
-		createConv:  createConv,
-		saveMessage: saveMessage,
-		userRepo:    userRepo,
+		ragClient:        ragClient,
+		checkLimits:      checkLimits,
+		recordUsage:      recordUsage,
+		createConv:       createConv,
+		saveMessage:      saveMessage,
+		conversationRepo: conversationRepo,
+		userRepo:         userRepo,
 	}
 }
 
@@ -112,7 +116,10 @@ func (h *AskHandler) checkBilling(r *http.Request, userUUID uuid.UUID) bool {
 func (h *AskHandler) ensureConversation(r *http.Request, userUUID uuid.UUID, query, convIDStr string) uuid.UUID {
 	if convIDStr != "" {
 		if parsed, err := uuid.Parse(convIDStr); err == nil {
-			return parsed
+			conversation, err := h.conversationRepo.FindByID(r.Context(), parsed)
+			if err == nil && conversation.UserID == userUUID {
+				return parsed
+			}
 		}
 	}
 	convResp, err := h.createConv.Execute(r.Context(), chatuc.CreateConversationRequest{
@@ -126,11 +133,12 @@ func (h *AskHandler) ensureConversation(r *http.Request, userUUID uuid.UUID, que
 	return convResp.ConversationID
 }
 
-func (h *AskHandler) saveUserMessage(r *http.Request, convID uuid.UUID, query string) {
+func (h *AskHandler) saveUserMessage(r *http.Request, userUUID, convID uuid.UUID, query string) {
 	if convID == uuid.Nil {
 		return
 	}
 	if _, err := h.saveMessage.Execute(r.Context(), chatuc.SaveMessageRequest{
+		UserID:         userUUID,
 		ConversationID: convID,
 		Role:           "user",
 		Content:        query,
@@ -187,7 +195,7 @@ func (h *AskHandler) handleAsk(w http.ResponseWriter, r *http.Request) {
 	var conversationID uuid.UUID
 	if hasUser {
 		conversationID = h.ensureConversation(r, userUUID, req.Query, req.ConversationID)
-		h.saveUserMessage(r, conversationID, req.Query)
+		h.saveUserMessage(r, userUUID, conversationID, req.Query)
 	}
 
 	const noDocsAnswer = "В базе знаний пока нет документов. Добавьте документы через /api/rag/ingest, чтобы я мог отвечать на вопросы."
@@ -208,6 +216,7 @@ func (h *AskHandler) handleAsk(w http.ResponseWriter, r *http.Request) {
 			citData = append(citData, chatuc.CitationData{ChunkID: c.ID, SourceID: c.ID, Score: c.Score, Quote: c.Quote, Meta: c.Meta})
 		}
 		msgResp, err := h.saveMessage.Execute(ctx, chatuc.SaveMessageRequest{
+			UserID:         userUUID,
 			ConversationID: conversationID,
 			Role:           "assistant",
 			Content:        ragResp.Answer,
@@ -288,7 +297,7 @@ func (h *AskHandler) handleAskStream(w http.ResponseWriter, r *http.Request) {
 	var conversationID uuid.UUID
 	if hasUser {
 		conversationID = h.ensureConversation(r, userUUID, req.Query, req.ConversationID)
-		h.saveUserMessage(r, conversationID, req.Query)
+		h.saveUserMessage(r, userUUID, conversationID, req.Query)
 	}
 
 	// SSE headers — must be set before first write
@@ -311,6 +320,8 @@ func (h *AskHandler) handleAskStream(w http.ResponseWriter, r *http.Request) {
 
 	var fullContent strings.Builder
 	var citations []ragclient.Citation
+	var provider string
+	var model string
 	firstDelta := true
 
 	scanner := bufio.NewScanner(ragStream.Body)
@@ -352,6 +363,15 @@ func (h *AskHandler) handleAskStream(w http.ResponseWriter, r *http.Request) {
 				fullContent.WriteString(delta)
 				writeSSE(w, flusher, map[string]any{"type": "delta", "data": delta})
 			}
+		case "meta":
+			var meta struct {
+				Provider string `json:"provider"`
+				Model    string `json:"model"`
+			}
+			if err := json.Unmarshal(event.Data, &meta); err == nil {
+				provider = meta.Provider
+				model = meta.Model
+			}
 		}
 	}
 
@@ -364,10 +384,11 @@ func (h *AskHandler) handleAskStream(w http.ResponseWriter, r *http.Request) {
 			citData = append(citData, chatuc.CitationData{ChunkID: c.ID, SourceID: c.ID, Score: c.Score, Quote: c.Quote, Meta: c.Meta})
 		}
 		msgResp, err := h.saveMessage.Execute(ctx, chatuc.SaveMessageRequest{
+			UserID:         userUUID,
 			ConversationID: conversationID,
 			Role:           "assistant",
 			Content:        fullContent.String(),
-			Metadata:       map[string]interface{}{"provider": "gigachat", "model": "GigaChat-Pro"},
+			Metadata:       map[string]interface{}{"provider": provider, "model": model},
 			Citations:      citData,
 		})
 		if err != nil {

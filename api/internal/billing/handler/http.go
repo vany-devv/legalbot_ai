@@ -31,9 +31,6 @@ func NewBillingHandler(
 }
 
 func (h *BillingHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/billing/subscriptions", h.handleCreateSubscription)
-	mux.HandleFunc("/api/billing/limits/check", h.handleCheckLimits)
-	mux.HandleFunc("/api/billing/usage", h.handleRecordUsage)
 	mux.HandleFunc("/api/billing/me", h.handleMe)
 }
 
@@ -42,11 +39,17 @@ func (h *BillingHandler) handleCreateSubscription(w http.ResponseWriter, r *http
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	userID, ok := currentBillingUserID(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 	var req usecase.CreateSubscriptionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
+	req.UserID = userID
 
 	resp, err := h.createSubscriptionUC.Execute(r.Context(), req)
 	if err != nil {
@@ -63,11 +66,17 @@ func (h *BillingHandler) handleCheckLimits(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	userID, ok := currentBillingUserID(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 	var req usecase.CheckLimitsRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
+	req.UserID = userID
 
 	resp, err := h.checkLimitsUC.Execute(r.Context(), req)
 	if err != nil {
@@ -110,11 +119,17 @@ func (h *BillingHandler) handleRecordUsage(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	userID, ok := currentBillingUserID(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 	var req usecase.RecordUsageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
+	req.UserID = userID
 
 	if err := h.recordUsageUC.Execute(r.Context(), req); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -122,4 +137,16 @@ func (h *BillingHandler) handleRecordUsage(w http.ResponseWriter, r *http.Reques
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func currentBillingUserID(r *http.Request) (uuid.UUID, bool) {
+	userIDStr, ok := middleware.GetUserID(r.Context())
+	if !ok || userIDStr == "" {
+		return uuid.Nil, false
+	}
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		return uuid.Nil, false
+	}
+	return userID, true
 }

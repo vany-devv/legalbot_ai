@@ -4,7 +4,6 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import analyze, answer, documents, ingest, search
 from app.dependencies import close_dependencies, get_vector_repo, init_dependencies
@@ -31,14 +30,6 @@ app = FastAPI(
     version="2.0.0",
     description="Hybrid RAG service for Russian legal documents",
     lifespan=lifespan,
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
 )
 
 app.include_router(ingest.router)

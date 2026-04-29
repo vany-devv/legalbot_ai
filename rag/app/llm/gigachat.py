@@ -35,7 +35,7 @@ class GigaChatAuth:
             return self._token
 
     async def _fetch_token(self) -> tuple[str, float]:
-        async with httpx.AsyncClient(verify=False, timeout=15) as client:
+        async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.post(
                 _AUTH_URL,
                 headers={
@@ -68,7 +68,7 @@ class GigaChatProvider(LLMProvider):
     )
     async def complete(self, system: str, user: str, max_tokens: int = 2048) -> str:
         token = await self._auth.get_token()
-        async with httpx.AsyncClient(verify=False, timeout=60) as client:
+        async with httpx.AsyncClient(timeout=60) as client:
             resp = await client.post(
                 _API_URL,
                 headers={"Authorization": f"Bearer {token}"},
@@ -87,7 +87,7 @@ class GigaChatProvider(LLMProvider):
 
     async def stream(self, system: str, user: str) -> AsyncIterator[str]:
         token = await self._auth.get_token()
-        async with httpx.AsyncClient(verify=False, timeout=120) as client:
+        async with httpx.AsyncClient(timeout=120) as client:
             async with client.stream(
                 "POST",
                 _API_URL,
