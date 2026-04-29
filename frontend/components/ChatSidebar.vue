@@ -164,13 +164,12 @@
 
 <script setup lang="ts">
 const { conversations, currentConversationId, newChat, loadConversations } = useChat()
-const { user, isLoggedIn, isAdmin, logout, init } = useAuth()
+const { user, isLoggedIn, isAdmin, logout } = useAuth()
 const { sidebarOpen, sidebarReady, toggle } = useSidebar()
 const { theme, toggle: toggleTheme } = useTheme()
 const router = useRouter()
 
 onMounted(async () => {
-  init()
   await loadConversations()
 })
 

@@ -23,7 +23,7 @@ const error = ref<string | null>(null)
 export function useAnalyze() {
   const config = useRuntimeConfig()
   const api = config.public.apiBase
-  const { authHeaders } = useAuth()
+  const { authHeaders, handleUnauthorized } = useAuth()
 
   function reset() {
     thinking.value = []
@@ -55,6 +55,14 @@ export function useAnalyze() {
       if (response.status === 402) {
         useToast().show('Лимит запросов исчерпан. Обновите подписку.', 'error', 6000)
         error.value = 'Лимит запросов исчерпан'
+        return
+      }
+      if (response.status === 401) {
+        await handleUnauthorized()
+        return
+      }
+      if (response.status === 413) {
+        error.value = 'Файл слишком большой'
         return
       }
       if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`)
@@ -118,4 +126,3 @@ export function useAnalyze() {
     reset,
   }
 }
-

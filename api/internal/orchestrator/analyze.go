@@ -2,8 +2,8 @@ package orchestrator
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -18,6 +18,8 @@ import (
 	"legalbot/services/internal/middleware"
 	"legalbot/services/internal/ragclient"
 )
+
+const analyzeMaxUploadBytes int64 = 32 << 20
 
 type AnalyzeHandler struct {
 	ragClient   *ragclient.Client
@@ -75,10 +77,20 @@ func (h *AnalyzeHandler) handleAnalyzeStream(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, analyzeMaxUploadBytes)
+
 	// Parse multipart from client
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			http.Error(w, "uploaded file is too large", http.StatusRequestEntityTooLarge)
+			return
+		}
 		http.Error(w, "invalid multipart form", http.StatusBadRequest)
 		return
+	}
+	if r.MultipartForm != nil {
+		defer r.MultipartForm.RemoveAll()
 	}
 
 	text := r.FormValue("text")
@@ -93,9 +105,7 @@ func (h *AnalyzeHandler) handleAnalyzeStream(w http.ResponseWriter, r *http.Requ
 	file, header, err := r.FormFile("file")
 	if err == nil {
 		defer file.Close()
-		var buf bytes.Buffer
-		io.Copy(&buf, file)
-		fileData = &buf
+		fileData = file
 		filename = header.Filename
 	}
 
@@ -135,6 +145,7 @@ func (h *AnalyzeHandler) handleAnalyzeStream(w http.ResponseWriter, r *http.Requ
 	// Proxy SSE events from RAG to client
 	scanner := bufio.NewScanner(ragResp.Body)
 	scanner.Buffer(make([]byte, 512*1024), 512*1024)
+	streamCompleted := false
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -143,6 +154,7 @@ func (h *AnalyzeHandler) handleAnalyzeStream(w http.ResponseWriter, r *http.Requ
 		}
 		payload := strings.TrimPrefix(line, "data: ")
 		if payload == "[DONE]" {
+			streamCompleted = true
 			break
 		}
 
@@ -157,9 +169,15 @@ func (h *AnalyzeHandler) handleAnalyzeStream(w http.ResponseWriter, r *http.Requ
 		// Forward all events as-is
 		writeSSE(w, flusher, json.RawMessage(payload))
 	}
+	if err := scanner.Err(); err != nil {
+		writeSSE(w, flusher, map[string]any{"type": "error", "text": "stream read failed"})
+		fmt.Fprintf(w, "data: [DONE]\n\n")
+		flusher.Flush()
+		return
+	}
 
 	// Record usage
-	if hasUser {
+	if hasUser && streamCompleted {
 		parsed, _ := uuid.Parse(userID)
 		if err := h.recordUsage.Execute(ctx, billinguc.RecordUsageRequest{
 			UserID:       parsed,

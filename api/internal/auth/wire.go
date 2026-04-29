@@ -14,8 +14,9 @@ import (
 // Module экспортирует handler и репозитории auth-домена.
 // UserRepo нужен наружу для admin middleware и orchestrator-bypass.
 type Module struct {
-	Handler  *handler.AuthHandler
-	UserRepo domain.UserRepository
+	Handler     *handler.AuthHandler
+	UserRepo    domain.UserRepository
+	SessionRepo domain.SessionRepository
 }
 
 func Wire(
@@ -37,9 +38,11 @@ func Wire(
 	loginUC := usecase.NewLoginUseCase(userRepo, sessionRepo, passwordHasher, tokenGenerator)
 	getMeUC := usecase.NewGetMeUseCase(userRepo, tokenGenerator)
 	changePasswordUC := usecase.NewChangePasswordUseCase(userRepo, sessionRepo, passwordHasher)
+	logoutUC := usecase.NewLogoutUseCase(sessionRepo)
 
 	return &Module{
-		Handler:  handler.NewAuthHandler(registerUC, loginUC, getMeUC, changePasswordUC),
-		UserRepo: userRepo,
+		Handler:     handler.NewAuthHandler(registerUC, loginUC, getMeUC, changePasswordUC, logoutUC),
+		UserRepo:    userRepo,
+		SessionRepo: sessionRepo,
 	}
 }

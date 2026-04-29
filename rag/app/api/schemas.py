@@ -64,6 +64,8 @@ class AnswerRequest(BaseModel):
 class AnswerResponse(BaseModel):
     answer: str
     citations: list[CitationResponse]
+    provider: str = ""
+    model: str = ""
 
 
 # ---------------------------------------------------------------------------

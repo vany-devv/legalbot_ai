@@ -11,7 +11,6 @@
 <script setup lang="ts">
 const route = useRoute()
 const { init } = useTheme()
-const { init: initAuth } = useAuth()
 const { init: initSidebar } = useSidebar()
 
 useHead({
@@ -20,7 +19,6 @@ useHead({
 
 onMounted(() => {
   init()
-  initAuth()
   initSidebar()
 })
 

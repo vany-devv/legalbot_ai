@@ -226,7 +226,6 @@ useHead({ title: 'Настройки' })
 const { theme, toggle } = useTheme()
 const { user, isLoggedIn, logout, changePassword } = useAuth()
 const { billing, usagePercent, refresh: refreshBilling } = useBilling()
-const router = useRouter()
 
 onMounted(() => {
   if (isLoggedIn.value) refreshBilling()
@@ -300,9 +299,8 @@ async function handleChangePassword() {
   }
 }
 
-function handleLogout() {
-  logout()
-  router.push('/')
+async function handleLogout() {
+  await logout()
 }
 </script>
 

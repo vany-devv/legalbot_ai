@@ -46,7 +46,7 @@ class GigaChatEmbedder(BaseEmbedder):
         import httpx
 
         token = await self._auth.get_token()
-        async with httpx.AsyncClient(verify=False, timeout=30) as client:
+        async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post(
                 _GIGACHAT_EMBEDDINGS_URL,
                 headers={"Authorization": f"Bearer {token}"},

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/google/uuid"
 	"legalbot/services/internal/auth/domain"
 )
 
@@ -12,7 +13,12 @@ type contextKey string
 
 const UserIDKey contextKey = "userID"
 
-func Auth(next http.Handler, tokenGen domain.TokenGenerator, publicPaths []string) http.Handler {
+func Auth(
+	next http.Handler,
+	tokenGen domain.TokenGenerator,
+	sessionRepo domain.SessionRepository,
+	publicPaths []string,
+) http.Handler {
 	public := make(map[string]bool, len(publicPaths))
 	for _, p := range publicPaths {
 		public[p] = true
@@ -26,7 +32,7 @@ func Auth(next http.Handler, tokenGen domain.TokenGenerator, publicPaths []strin
 
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
-			next.ServeHTTP(w, r)
+			http.Error(w, "authorization required", http.StatusUnauthorized)
 			return
 		}
 
@@ -39,6 +45,18 @@ func Auth(next http.Handler, tokenGen domain.TokenGenerator, publicPaths []strin
 		userID, err := tokenGen.Validate(token)
 		if err != nil {
 			http.Error(w, "invalid or expired token", http.StatusUnauthorized)
+			return
+		}
+
+		session, err := sessionRepo.FindByToken(r.Context(), token)
+		if err != nil {
+			http.Error(w, "invalid or expired session", http.StatusUnauthorized)
+			return
+		}
+
+		sessionUserID := session.UserID.String()
+		if _, err := uuid.Parse(userID); err != nil || sessionUserID != userID {
+			http.Error(w, "invalid session", http.StatusUnauthorized)
 			return
 		}
 

@@ -29,8 +29,8 @@ func NewGetConversationUseCase(
 
 type GetConversationResponse struct {
 	ConversationID uuid.UUID
-	Title           string
-	Messages        []MessageWithCitations
+	Title          string
+	Messages       []MessageWithCitations
 }
 
 type MessageWithCitations struct {
@@ -50,11 +50,14 @@ type CitationData struct {
 	Meta     map[string]interface{}
 }
 
-func (uc *GetConversationUseCase) Execute(ctx context.Context, conversationID uuid.UUID) (*GetConversationResponse, error) {
+func (uc *GetConversationUseCase) Execute(ctx context.Context, conversationID, userID uuid.UUID) (*GetConversationResponse, error) {
 	// Получение диалога
 	conversation, err := uc.conversationRepo.FindByID(ctx, conversationID)
 	if err != nil {
-		return nil, fmt.Errorf("conversation not found: %w", err)
+		return nil, ErrConversationNotFound
+	}
+	if conversation.UserID != userID {
+		return nil, ErrConversationForbidden
 	}
 
 	// Получение сообщений
@@ -66,8 +69,8 @@ func (uc *GetConversationUseCase) Execute(ctx context.Context, conversationID uu
 	// Формирование ответа с цитатами
 	result := &GetConversationResponse{
 		ConversationID: conversation.ID,
-		Title:           conversation.Title,
-		Messages:        make([]MessageWithCitations, 0, len(messages)),
+		Title:          conversation.Title,
+		Messages:       make([]MessageWithCitations, 0, len(messages)),
 	}
 
 	for _, msg := range messages {
@@ -97,4 +100,3 @@ func (uc *GetConversationUseCase) Execute(ctx context.Context, conversationID uu
 
 	return result, nil
 }
-

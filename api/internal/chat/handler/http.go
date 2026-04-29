@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -71,11 +72,18 @@ func (h *ChatHandler) handleListConversations(w http.ResponseWriter, r *http.Req
 }
 
 func (h *ChatHandler) handleCreateConversation(w http.ResponseWriter, r *http.Request) {
+	userID, ok := currentUserID(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	var req usecase.CreateConversationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
+	req.UserID = userID
 
 	resp, err := h.createConversationUC.Execute(r.Context(), req)
 	if err != nil {
@@ -92,15 +100,28 @@ func (h *ChatHandler) handleSaveMessage(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	userID, ok := currentUserID(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 	var req usecase.SaveMessageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
+	req.UserID = userID
 
 	resp, err := h.saveMessageUC.Execute(r.Context(), req)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		switch {
+		case errors.Is(err, usecase.ErrConversationForbidden):
+			http.Error(w, err.Error(), http.StatusForbidden)
+		case errors.Is(err, usecase.ErrConversationNotFound):
+			http.Error(w, err.Error(), http.StatusNotFound)
+		default:
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		}
 		return
 	}
 
@@ -113,6 +134,11 @@ func (h *ChatHandler) handleGetConversation(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	userID, ok := currentUserID(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	path := strings.TrimPrefix(r.URL.Path, "/api/chat/conversations/")
 	idStr := strings.Split(path, "/")[0]
@@ -122,12 +148,31 @@ func (h *ChatHandler) handleGetConversation(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	resp, err := h.getConversationUC.Execute(r.Context(), conversationID)
+	resp, err := h.getConversationUC.Execute(r.Context(), conversationID, userID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		switch {
+		case errors.Is(err, usecase.ErrConversationForbidden):
+			http.Error(w, err.Error(), http.StatusForbidden)
+		case errors.Is(err, usecase.ErrConversationNotFound):
+			http.Error(w, err.Error(), http.StatusNotFound)
+		default:
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+}
+
+func currentUserID(r *http.Request) (uuid.UUID, bool) {
+	userID, ok := middleware.GetUserID(r.Context())
+	if !ok || userID == "" {
+		return uuid.Nil, false
+	}
+	parsed, err := uuid.Parse(userID)
+	if err != nil {
+		return uuid.Nil, false
+	}
+	return parsed, true
 }

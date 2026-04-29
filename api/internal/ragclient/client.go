@@ -114,30 +114,43 @@ func (c *Client) AnswerStream(ctx context.Context, query string, topK int) (*htt
 // AnalyzeStream sends ad text (and optionally a file) to POST /analyze/stream
 // as multipart/form-data and returns the raw SSE response.
 func (c *Client) AnalyzeStream(ctx context.Context, text string, fileData io.Reader, filename string, topK int) (*http.Response, error) {
-	var buf bytes.Buffer
-	w := multipart.NewWriter(&buf)
+	pr, pw := io.Pipe()
+	w := multipart.NewWriter(pw)
+	contentType := w.FormDataContentType()
 
-	if text != "" {
-		_ = w.WriteField("text", text)
-	}
-	if fileData != nil && filename != "" {
-		part, err := w.CreateFormFile("file", filename)
-		if err != nil {
-			return nil, fmt.Errorf("create form file: %w", err)
+	go func() {
+		defer pw.Close()
+		defer w.Close()
+
+		if text != "" {
+			if err := w.WriteField("text", text); err != nil {
+				_ = pw.CloseWithError(fmt.Errorf("write text field: %w", err))
+				return
+			}
 		}
-		if _, err := io.Copy(part, fileData); err != nil {
-			return nil, fmt.Errorf("copy file data: %w", err)
+		if fileData != nil && filename != "" {
+			part, err := w.CreateFormFile("file", filename)
+			if err != nil {
+				_ = pw.CloseWithError(fmt.Errorf("create form file: %w", err))
+				return
+			}
+			if _, err := io.Copy(part, fileData); err != nil {
+				_ = pw.CloseWithError(fmt.Errorf("copy file data: %w", err))
+				return
+			}
 		}
-	}
-	_ = w.WriteField("top_k", fmt.Sprintf("%d", topK))
-	w.Close()
+		if err := w.WriteField("top_k", fmt.Sprintf("%d", topK)); err != nil {
+			_ = pw.CloseWithError(fmt.Errorf("write top_k field: %w", err))
+			return
+		}
+	}()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		c.baseURL+"/analyze/stream", &buf)
+		c.baseURL+"/analyze/stream", pr)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
-	req.Header.Set("Content-Type", w.FormDataContentType())
+	req.Header.Set("Content-Type", contentType)
 	req.Header.Set("Accept", "text/event-stream")
 
 	resp, err := (&http.Client{}).Do(req)

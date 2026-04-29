@@ -4,21 +4,115 @@ interface User {
   role: string
 }
 
+const authRoutes = ['/auth/login', '/auth/register']
 const token = ref<string | null>(null)
 const user = ref<User | null>(null)
 const loading = ref(false)
+const initialized = ref(false)
+let initPromise: Promise<void> | null = null
+
+function normalizeInternalPath(candidate: unknown): string | null {
+  if (typeof candidate !== 'string' || !candidate.startsWith('/') || candidate.startsWith('//')) {
+    return null
+  }
+  return candidate
+}
+
+function isAuthRoute(path: string): boolean {
+  const [pathname] = path.split(/[?#]/, 1)
+  return authRoutes.includes(pathname || path)
+}
+
+function currentLocationPath(): string {
+  if (import.meta.server) return '/'
+  return `${window.location.pathname}${window.location.search}${window.location.hash}`
+}
 
 export function useAuth() {
   const config = useRuntimeConfig()
   const api = config.public.apiBase
+  const router = useRouter()
+  const tokenCookie = useCookie<string | null>('lb-token', {
+    sameSite: 'lax',
+    watch: false,
+  })
 
-  function init() {
-    if (import.meta.server) return
-    const saved = localStorage.getItem('lb-token')
-    if (saved) {
-      token.value = saved
-      fetchMe().then(() => useBilling().refresh())
+  function clearAuthState() {
+    token.value = null
+    user.value = null
+    tokenCookie.value = null
+    if (import.meta.client) {
+      localStorage.removeItem('lb-token')
     }
+  }
+
+  function persistToken(nextToken: string) {
+    token.value = nextToken
+    tokenCookie.value = nextToken
+    if (import.meta.client) {
+      localStorage.setItem('lb-token', nextToken)
+    }
+  }
+
+  function readStoredToken() {
+    if (token.value) return token.value
+    if (import.meta.client) {
+      return localStorage.getItem('lb-token') || tokenCookie.value || null
+    }
+    return tokenCookie.value || null
+  }
+
+  function hasStoredToken() {
+    return !!readStoredToken()
+  }
+
+  function buildLoginRedirect(nextPath?: unknown) {
+    const safeNext = normalizeInternalPath(nextPath)
+    if (!safeNext || isAuthRoute(safeNext)) return '/auth/login'
+    return `/auth/login?next=${encodeURIComponent(safeNext)}`
+  }
+
+  function resolvePostAuthRedirect(nextPath?: unknown) {
+    const safeNext = normalizeInternalPath(nextPath)
+    if (!safeNext || isAuthRoute(safeNext)) return '/'
+    return safeNext
+  }
+
+  async function redirectToLogin(nextPath?: string) {
+    if (import.meta.server) return
+    const target = buildLoginRedirect(nextPath ?? currentLocationPath())
+    if (currentLocationPath() === target) return
+    await router.replace(target)
+  }
+
+  async function handleUnauthorized(nextPath?: string) {
+    clearAuthState()
+    await redirectToLogin(nextPath)
+  }
+
+  async function init() {
+    if (import.meta.server) return
+    if (initialized.value) return
+    if (initPromise) return initPromise
+
+    initPromise = (async () => {
+      const saved = readStoredToken()
+      if (!saved) {
+        clearAuthState()
+        return
+      }
+
+      persistToken(saved)
+      await fetchMe()
+      if (user.value) {
+        await useBilling().refresh()
+      }
+    })().finally(() => {
+      initialized.value = true
+      initPromise = null
+    })
+
+    return initPromise
   }
 
   function authHeaders(): Record<string, string> {
@@ -32,8 +126,8 @@ export function useAuth() {
         method: 'POST',
         body: { Email: email, Password: password },
       })
-      token.value = res.Token
-      localStorage.setItem('lb-token', res.Token)
+      persistToken(res.Token)
+      initialized.value = true
       await fetchMe()
       await useBilling().refresh()
     } finally {
@@ -62,18 +156,26 @@ export function useAuth() {
       })
       user.value = { id: res.ID, email: res.Email, role: res.Role || 'user' }
     } catch (e: any) {
-      // Only clear session on auth errors, not network issues
-      if (e?.status === 401 || e?.statusCode === 401) logout()
+      if (e?.status === 401 || e?.statusCode === 401) {
+        await handleUnauthorized()
+      }
     }
   }
 
-  function logout() {
-    token.value = null
-    user.value = null
-    localStorage.removeItem('lb-token')
-    if (!import.meta.server) {
-      window.location.href = '/'
+  async function logout() {
+    const currentToken = token.value
+    try {
+      if (currentToken) {
+        await $fetch(`${api}/auth/logout`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${currentToken}` },
+        })
+      }
+    } catch {
+      // Local cleanup still happens if the server session is already gone.
     }
+    clearAuthState()
+    await router.replace('/auth/login')
   }
 
   async function changePassword(currentPassword: string, newPassword: string) {
@@ -91,6 +193,7 @@ export function useAuth() {
     token: readonly(token),
     user: readonly(user),
     loading: readonly(loading),
+    initialized: readonly(initialized),
     isLoggedIn,
     isAdmin,
     init,
@@ -98,6 +201,11 @@ export function useAuth() {
     register,
     logout,
     changePassword,
+    fetchMe,
+    handleUnauthorized,
     authHeaders,
+    buildLoginRedirect,
+    resolvePostAuthRedirect,
+    hasStoredToken,
   }
 }

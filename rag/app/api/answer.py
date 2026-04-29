@@ -17,6 +17,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/answer", tags=["answer"])
 
 
+def _llm_metadata(llm: LLMProvider) -> tuple[str, str]:
+    name = llm.__class__.__name__.replace("Provider", "").lower()
+    return name, getattr(llm, "_model", "")
+
+
 def _build_context(results: list[SearchResult]) -> str:
     parts = []
     for i, r in enumerate(results, 1):
@@ -106,7 +111,8 @@ async def answer(
     text = await llm.complete(system=LEGAL_SYSTEM_PROMPT, user=user_msg)
     all_citations = _citations(results)
     used_citations = _filter_used_citations(text, all_citations)
-    return AnswerResponse(answer=text, citations=used_citations)
+    provider, model = _llm_metadata(llm)
+    return AnswerResponse(answer=text, citations=used_citations, provider=provider, model=model)
 
 
 @router.post("/stream")
@@ -119,6 +125,7 @@ async def answer_stream(
     context = _build_context(results)
     user_msg = LEGAL_USER_TEMPLATE.format(query=req.query, context=context)
     all_citations = _citations(results)
+    provider, model = _llm_metadata(llm)
 
     async def generate():
         # Collect full answer to filter citations
@@ -132,6 +139,7 @@ async def answer_stream(
         used_citations = _filter_used_citations(answer_text, all_citations)
         citations_data = [c.model_dump() for c in used_citations]
         yield f"data: {json.dumps({'type': 'citations', 'data': citations_data}, ensure_ascii=False)}\n\n"
+        yield f"data: {json.dumps({'type': 'meta', 'data': {'provider': provider, 'model': model}}, ensure_ascii=False)}\n\n"
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")

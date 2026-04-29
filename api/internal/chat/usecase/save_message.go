@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -10,21 +11,25 @@ import (
 )
 
 type SaveMessageUseCase struct {
-	messageRepo  domain.MessageRepository
-	citationRepo domain.CitationRepository
+	conversationRepo domain.ConversationRepository
+	messageRepo      domain.MessageRepository
+	citationRepo     domain.CitationRepository
 }
 
 func NewSaveMessageUseCase(
+	conversationRepo domain.ConversationRepository,
 	messageRepo domain.MessageRepository,
 	citationRepo domain.CitationRepository,
 ) *SaveMessageUseCase {
 	return &SaveMessageUseCase{
-		messageRepo:  messageRepo,
-		citationRepo: citationRepo,
+		conversationRepo: conversationRepo,
+		messageRepo:      messageRepo,
+		citationRepo:     citationRepo,
 	}
 }
 
 type SaveMessageRequest struct {
+	UserID         uuid.UUID
 	ConversationID uuid.UUID
 	Role           string
 	Content        string
@@ -38,6 +43,18 @@ type SaveMessageResponse struct {
 }
 
 func (uc *SaveMessageUseCase) Execute(ctx context.Context, req SaveMessageRequest) (*SaveMessageResponse, error) {
+	if req.UserID == uuid.Nil {
+		return nil, errors.New("user id is required")
+	}
+
+	conversation, err := uc.conversationRepo.FindByID(ctx, req.ConversationID)
+	if err != nil {
+		return nil, ErrConversationNotFound
+	}
+	if conversation.UserID != req.UserID {
+		return nil, ErrConversationForbidden
+	}
+
 	message := &domain.Message{
 		ID:             uuid.New(),
 		ConversationID: req.ConversationID,
