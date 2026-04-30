@@ -11,11 +11,12 @@ import (
 )
 
 type AuthHandler struct {
-	registerUseCase       *usecase.RegisterUseCase
-	loginUseCase          *usecase.LoginUseCase
-	getMeUseCase          *usecase.GetMeUseCase
-	changePasswordUseCase *usecase.ChangePasswordUseCase
-	logoutUseCase         *usecase.LogoutUseCase
+	registerUseCase          *usecase.RegisterUseCase
+	loginUseCase             *usecase.LoginUseCase
+	getMeUseCase             *usecase.GetMeUseCase
+	changePasswordUseCase    *usecase.ChangePasswordUseCase
+	logoutUseCase            *usecase.LogoutUseCase
+	updatePreferencesUseCase *usecase.UpdatePreferencesUseCase
 }
 
 func NewAuthHandler(
@@ -24,13 +25,15 @@ func NewAuthHandler(
 	getMeUseCase *usecase.GetMeUseCase,
 	changePasswordUseCase *usecase.ChangePasswordUseCase,
 	logoutUseCase *usecase.LogoutUseCase,
+	updatePreferencesUseCase *usecase.UpdatePreferencesUseCase,
 ) *AuthHandler {
 	return &AuthHandler{
-		registerUseCase:       registerUseCase,
-		loginUseCase:          loginUseCase,
-		getMeUseCase:          getMeUseCase,
-		changePasswordUseCase: changePasswordUseCase,
-		logoutUseCase:         logoutUseCase,
+		registerUseCase:          registerUseCase,
+		loginUseCase:             loginUseCase,
+		getMeUseCase:             getMeUseCase,
+		changePasswordUseCase:    changePasswordUseCase,
+		logoutUseCase:            logoutUseCase,
+		updatePreferencesUseCase: updatePreferencesUseCase,
 	}
 }
 
@@ -38,6 +41,7 @@ func (h *AuthHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/auth/register", h.handleRegister)
 	mux.HandleFunc("/api/auth/login", h.handleLogin)
 	mux.HandleFunc("/api/auth/me", h.handleMe)
+	mux.HandleFunc("/api/auth/me/preferences", h.handlePreferences)
 	mux.HandleFunc("/api/auth/password", h.handleChangePassword)
 	mux.HandleFunc("/api/auth/logout", h.handleLogout)
 }
@@ -130,7 +134,6 @@ func (h *AuthHandler) handleMe(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	// Извлечение токена из заголовка
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
 		http.Error(w, "Authorization header required", http.StatusUnauthorized)
@@ -177,4 +180,50 @@ func (h *AuthHandler) handleLogout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// handlePreferences — PATCH /api/auth/me/preferences
+// body: { "preferred_palette": "navy" }   (любое поле опционально)
+func (h *AuthHandler) handlePreferences(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPatch {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userIDStr, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		http.Error(w, "Authorization required", http.StatusUnauthorized)
+		return
+	}
+
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusUnauthorized)
+		return
+	}
+
+	var body struct {
+		PreferredPalette *string `json:"preferred_palette"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	user, err := h.updatePreferencesUseCase.Execute(r.Context(), usecase.UpdatePreferencesRequest{
+		UserID:           userID,
+		PreferredPalette: body.PreferredPalette,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"id":                user.ID,
+		"email":             user.Email,
+		"role":              user.Role,
+		"preferred_palette": user.PreferredPalette,
+	})
 }

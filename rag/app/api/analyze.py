@@ -97,15 +97,93 @@ async def _supplementary_search(
     return merged
 
 
+def _normalize_extracted_text(text: str) -> str:
+    """Чистит soft-wrap'ы PDF и навязывает структуру абзацев.
+
+    Шаги:
+      1) убираем мягкий перенос: <слово>-\\n<слово>  → <слово><слово>
+      2) защищаем абзацные разделители (≥2 newline)
+      3) одиночный \\n внутри абзаца склеиваем пробелом
+      4) схлопываем повторные пробелы
+      5) fallback-эвристика: если результат — один большой кусок (>500 симв),
+         бьём его по предложениям, группируя ~280 симв на абзац.
+    """
+    if not text:
+        return text
+    # 1) hyphenation: «слово-\nслово» (включая «-­\n», soft-hyphen U+00AD)
+    text = re.sub(r"([\wа-яА-ЯёЁ])[­-]\n([\wа-яА-ЯёЁ])", r"\1\2", text)
+    # 2-4) собираем абзацы
+    paragraphs = re.split(r"\n\s*\n", text)
+    cleaned: list[str] = []
+    for p in paragraphs:
+        joined = re.sub(r"[ \t]*\n[ \t]*", " ", p)
+        joined = re.sub(r"[ \t]{2,}", " ", joined).strip()
+        if joined:
+            cleaned.append(joined)
+    result = "\n\n".join(cleaned)
+
+    # 5) Fallback: если разделителей нет / их мало, а текст длинный — режем по предложениям.
+    if len(cleaned) <= 1 and len(result) > 500:
+        result = _split_by_sentences(result, target_chars=280)
+    return result
+
+
+def _split_by_sentences(text: str, target_chars: int = 280) -> str:
+    """Режет монолитный текст на абзацы по границам предложений
+    (точка/восклицание/вопрос + пробел + заглавная буква).
+    Группирует ~target_chars символов в один абзац."""
+    sentences = re.split(r"(?<=[.!?])\s+(?=[«\"А-ЯЁA-Z])", text)
+    if len(sentences) <= 2:
+        return text
+    chunks: list[str] = []
+    buf: list[str] = []
+    cur = 0
+    for s in sentences:
+        buf.append(s)
+        cur += len(s) + 1
+        if cur >= target_chars:
+            chunks.append(" ".join(buf))
+            buf, cur = [], 0
+    if buf:
+        chunks.append(" ".join(buf))
+    return "\n\n".join(chunks)
+
+
+def _extract_pdf_paragraphs(content: bytes) -> str:
+    """PDF-экстракция в block-режиме: PyMuPDF группирует текст по визуальным
+    блокам (абзацам/заголовкам), не по строкам. Это сохраняет логику абзацев,
+    тогда как `page.get_text()` без аргумента склеивает всё через \\n на каждой
+    строке и теряет структуру.
+    """
+    import fitz
+
+    doc = fitz.open(stream=content, filetype="pdf")
+    paragraphs: list[str] = []
+    for page in doc:
+        for block in page.get_text("blocks"):
+            # block: (x0, y0, x1, y1, text, block_no, block_type)
+            if len(block) >= 7 and block[6] != 0:
+                continue  # пропускаем не-текстовые блоки (изображения)
+            text = (block[4] if len(block) > 4 else "") or ""
+            text = text.strip()
+            if text:
+                paragraphs.append(text)
+    return "\n\n".join(paragraphs)
+
+
 async def _resolve_ad_text(
     text: str | None, file: UploadFile | None,
 ) -> str:
     if file is not None:
         content = await file.read()
-        extracted = _extract_text(content, file.filename or "upload.txt")
+        filename = file.filename or "upload.txt"
+        if filename.lower().endswith(".pdf"):
+            extracted = _extract_pdf_paragraphs(content)
+        else:
+            extracted = _extract_text(content, filename)
         if not extracted.strip():
             raise HTTPException(status_code=422, detail="Could not extract text from file")
-        return extracted
+        return _normalize_extracted_text(extracted)
     if text:
         return text
     raise HTTPException(status_code=422, detail="Provide either 'text' or 'file'")
@@ -263,6 +341,9 @@ async def analyze_stream(
     async def generate():
         def _event(payload: dict) -> str:
             return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+        # Извлечённый текст материала — фронт использует для inline-подсветки фрагментов риска
+        yield _event({"type": "ad_text", "text": ad_text})
 
         yield _event({"type": "thinking", "text": "Определяю категорию и применимые нормы..."})
 

@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 
+	"legalbot/services/internal/analysis"
 	"legalbot/services/internal/auth"
 	"legalbot/services/internal/auth/infrastructure"
 	"legalbot/services/internal/billing"
@@ -45,6 +46,9 @@ func main() {
 	chatModule := chat.Wire(database.DB)
 	chatModule.Handler.RegisterRoutes(mux)
 
+	analysisModule := analysis.Wire(database.DB)
+	analysisModule.Handler.RegisterRoutes(mux)
+
 	// RAG proxy: публичные роуты (search, health) и admin-only (ingest, documents).
 	ragProxy := proxy.NewRAGProxy(cfg.RAGServiceURL, cfg.IngestAPIKey)
 	ragProxy.RegisterPublicRoutes(mux)
@@ -69,6 +73,7 @@ func main() {
 		billingModule.CheckLimits,
 		billingModule.RecordUsage,
 		authModule.UserRepo,
+		analysisModule.SaveAnalysisUC,
 	)
 	analyzeHandler.RegisterRoutes(mux)
 

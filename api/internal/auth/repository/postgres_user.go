@@ -22,24 +22,30 @@ func (r *PostgresUserRepository) Create(ctx context.Context, user *domain.User) 
 	if user.Role == "" {
 		user.Role = domain.RoleUser
 	}
+	if user.PreferredPalette == "" {
+		user.PreferredPalette = domain.DefaultPalette
+	}
 	query := `
-		INSERT INTO users (id, email, password_hash, role, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO users (id, email, password_hash, role, preferred_palette, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`
 	_, err := r.db.ExecContext(ctx, query,
-		user.ID, user.Email, user.PasswordHash, user.Role, user.CreatedAt, user.UpdatedAt)
+		user.ID, user.Email, user.PasswordHash, user.Role, user.PreferredPalette, user.CreatedAt, user.UpdatedAt)
 	return err
 }
 
 func (r *PostgresUserRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.User, error) {
 	query := `
-		SELECT id, email, password_hash, role, created_at, updated_at
+		SELECT id, email, password_hash, role,
+		       COALESCE(preferred_palette, $2) AS preferred_palette,
+		       created_at, updated_at
 		FROM users
 		WHERE id = $1
 	`
 	user := &domain.User{}
-	err := r.db.QueryRowContext(ctx, query, id).Scan(
-		&user.ID, &user.Email, &user.PasswordHash, &user.Role, &user.CreatedAt, &user.UpdatedAt,
+	err := r.db.QueryRowContext(ctx, query, id, domain.DefaultPalette).Scan(
+		&user.ID, &user.Email, &user.PasswordHash, &user.Role,
+		&user.PreferredPalette, &user.CreatedAt, &user.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("user not found")
@@ -49,13 +55,16 @@ func (r *PostgresUserRepository) FindByID(ctx context.Context, id uuid.UUID) (*d
 
 func (r *PostgresUserRepository) FindByEmail(ctx context.Context, email string) (*domain.User, error) {
 	query := `
-		SELECT id, email, password_hash, role, created_at, updated_at
+		SELECT id, email, password_hash, role,
+		       COALESCE(preferred_palette, $2) AS preferred_palette,
+		       created_at, updated_at
 		FROM users
 		WHERE email = $1
 	`
 	user := &domain.User{}
-	err := r.db.QueryRowContext(ctx, query, email).Scan(
-		&user.ID, &user.Email, &user.PasswordHash, &user.Role, &user.CreatedAt, &user.UpdatedAt,
+	err := r.db.QueryRowContext(ctx, query, email, domain.DefaultPalette).Scan(
+		&user.ID, &user.Email, &user.PasswordHash, &user.Role,
+		&user.PreferredPalette, &user.CreatedAt, &user.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("user not found")
@@ -65,12 +74,20 @@ func (r *PostgresUserRepository) FindByEmail(ctx context.Context, email string) 
 
 func (r *PostgresUserRepository) Update(ctx context.Context, user *domain.User) error {
 	user.UpdatedAt = time.Now()
+	if user.PreferredPalette == "" {
+		user.PreferredPalette = domain.DefaultPalette
+	}
 	query := `
 		UPDATE users
-		SET email = $2, password_hash = $3, role = $4, updated_at = $5
+		SET email = $2,
+		    password_hash = $3,
+		    role = $4,
+		    preferred_palette = $5,
+		    updated_at = $6
 		WHERE id = $1
 	`
-	_, err := r.db.ExecContext(ctx, query, user.ID, user.Email, user.PasswordHash, user.Role, user.UpdatedAt)
+	_, err := r.db.ExecContext(ctx, query,
+		user.ID, user.Email, user.PasswordHash, user.Role, user.PreferredPalette, user.UpdatedAt)
 	return err
 }
 
@@ -79,4 +96,3 @@ func (r *PostgresUserRepository) Delete(ctx context.Context, id uuid.UUID) error
 	_, err := r.db.ExecContext(ctx, query, id)
 	return err
 }
-

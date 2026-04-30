@@ -1,7 +1,7 @@
 <template>
   <div class="h-full overflow-y-auto bg-canvas px-6 py-8">
     <div class="max-w-[620px] mx-auto">
-      <h1 class="text-2xl font-bold text-ink mb-8">Настройки</h1>
+      <h1 class="text-2xl font-bold text-ink mb-8 font-display tracking-tight">Настройки</h1>
 
       <!-- Appearance -->
       <section class="mb-8">
@@ -16,7 +16,7 @@
           <div class="flex border border-rim rounded-lg overflow-hidden">
             <button
               class="flex items-center gap-1.5 px-3.5 py-2 text-sm transition-colors cursor-pointer"
-              :class="theme === 'dark' ? 'bg-brand-dim text-brand font-semibold' : 'bg-panel text-ink-muted hover:bg-dimmed'"
+              :class="theme === 'dark' ? 'bg-brand-dim text-ink font-semibold' : 'bg-panel text-ink-muted hover:bg-dimmed'"
               @click="theme !== 'dark' && toggle()"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -26,7 +26,7 @@
             </button>
             <button
               class="flex items-center gap-1.5 px-3.5 py-2 text-sm border-l border-rim transition-colors cursor-pointer"
-              :class="theme === 'light' ? 'bg-brand-dim text-brand font-semibold' : 'bg-panel text-ink-muted hover:bg-dimmed'"
+              :class="theme === 'light' ? 'bg-brand-dim text-ink font-semibold' : 'bg-panel text-ink-muted hover:bg-dimmed'"
               @click="theme !== 'light' && toggle()"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -37,6 +37,34 @@
                 <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
               </svg>
               Светлая
+            </button>
+          </div>
+        </div>
+
+        <!-- Palette picker -->
+        <div class="flex flex-col gap-3 py-3">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <p class="text-[15px] font-medium text-ink">Цветовая палитра</p>
+              <p class="text-sm text-ink-muted">Акцентный цвет интерфейса. Сохраняется в профиле.</p>
+            </div>
+          </div>
+          <div class="grid grid-cols-5 gap-2 sm:gap-3">
+            <button
+              v-for="p in palettes" :key="p.id"
+              class="palette-swatch group flex flex-col items-center gap-1.5 p-2 rounded-lg border transition-all cursor-pointer"
+              :class="palette === p.id
+                ? 'border-brand bg-brand-dim'
+                : 'border-rim hover:border-rim-strong bg-panel'"
+              @click="onSelectPalette(p.id)"
+            >
+              <span
+                class="block w-full aspect-square rounded-md ring-1 ring-inset ring-black/10"
+                :style="{ background: p.preview }"
+              />
+              <span class="text-[11px] font-medium" :class="palette === p.id ? 'text-ink' : 'text-ink-muted'">
+                {{ p.label }}
+              </span>
             </button>
           </div>
         </div>
@@ -224,12 +252,18 @@
 useHead({ title: 'Настройки' })
 
 const { theme, toggle } = useTheme()
+const { palette, palettes, set: setPalette } = usePalette()
 const { user, isLoggedIn, logout, changePassword } = useAuth()
 const { billing, usagePercent, refresh: refreshBilling } = useBilling()
 
 onMounted(() => {
   if (isLoggedIn.value) refreshBilling()
 })
+
+async function onSelectPalette(id: string) {
+  if (palette.value === id) return
+  await setPalette(id as any)
+}
 
 const showPasswordForm = ref(false)
 const currentPassword = ref('')
@@ -328,4 +362,9 @@ async function handleLogout() {
   transition: color 0.15s;
 }
 .eye-btn:hover { color: var(--text-primary); }
+
+.palette-swatch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 </style>

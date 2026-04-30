@@ -14,18 +14,22 @@ export function useTheme() {
     apply()
   }
 
+  function set(next: Theme) {
+    if (next !== theme.value) {
+      theme.value = next
+      localStorage.setItem('lb-theme', theme.value)
+      apply()
+    }
+  }
+
   function toggle() {
-    theme.value = theme.value === 'dark' ? 'light' : 'dark'
-    localStorage.setItem('lb-theme', theme.value)
-    apply()
+    set(theme.value === 'dark' ? 'light' : 'dark')
   }
 
   function apply() {
     if (import.meta.server) return
-    // Disable all transitions during theme switch to prevent desync flicker
     document.documentElement.classList.add('no-transition')
     document.documentElement.setAttribute('data-theme', theme.value)
-    // Re-enable after two frames (ensures paint completes first)
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         document.documentElement.classList.remove('no-transition')
@@ -33,5 +37,5 @@ export function useTheme() {
     })
   }
 
-  return { theme: readonly(theme), toggle, init }
+  return { theme: readonly(theme), toggle, set, init }
 }

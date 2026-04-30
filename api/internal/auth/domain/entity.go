@@ -11,14 +11,26 @@ const (
 	RoleAdmin = "admin"
 )
 
+// Допустимые палитры. Должны соответствовать списку в frontend/composables/usePalette.ts.
+var ValidPalettes = map[string]struct{}{
+	"indigo":   {},
+	"navy":     {},
+	"bordeaux": {},
+	"emerald":  {},
+	"graphite": {},
+}
+
+const DefaultPalette = "navy"
+
 // User представляет пользователя системы
 type User struct {
-	ID           uuid.UUID
-	Email        string
-	PasswordHash string
-	Role         string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID               uuid.UUID
+	Email            string
+	PasswordHash     string
+	Role             string
+	PreferredPalette string
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 // Token представляет JWT токен
@@ -36,4 +48,3 @@ type Session struct {
 	ExpiresAt time.Time
 	CreatedAt time.Time
 }
-

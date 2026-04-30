@@ -1,7 +1,19 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 const apiTarget = process.env.API_URL ?? 'http://localhost:8080'
 export default defineNuxtConfig({
-  modules: ['@nuxtjs/tailwindcss'],
+  modules: ['@nuxtjs/tailwindcss', '@nuxtjs/google-fonts'],
+  googleFonts: {
+    families: {
+      Inter: [400, 500, 600, 700],
+      Manrope: [500, 600, 700, 800],
+      'JetBrains Mono': [400, 500],
+    },
+    display: 'swap',
+    download: true,
+    preload: true,
+    inject: true,
+    overwriting: true,
+  },
   devtools: { enabled: false },
   future: { compatibilityVersion: 4 },
   app: {
@@ -20,7 +32,7 @@ export default defineNuxtConfig({
       script: [
         {
           // Anti-FOUC: apply saved theme before first paint
-          innerHTML: `(function(){try{var t=localStorage.getItem('lb-theme');if(t==='light'){document.documentElement.setAttribute('data-theme','light');}else if(!t&&window.matchMedia('(prefers-color-scheme:light)').matches){document.documentElement.setAttribute('data-theme','light');}}catch(e){}})();`,
+          innerHTML: `(function(){try{var t=localStorage.getItem('lb-theme');if(t==='light'){document.documentElement.setAttribute('data-theme','light');}else if(!t&&window.matchMedia('(prefers-color-scheme:light)').matches){document.documentElement.setAttribute('data-theme','light');}var p=localStorage.getItem('lb-palette');if(p&&['indigo','navy','bordeaux','emerald','graphite'].indexOf(p)>=0){document.documentElement.setAttribute('data-palette',p);}}catch(e){}})();`,
         },
       ],
     },

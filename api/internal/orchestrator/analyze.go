@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 
+	analysisuc "legalbot/services/internal/analysis/usecase"
 	authdomain "legalbot/services/internal/auth/domain"
 	authuc "legalbot/services/internal/auth/usecase"
 	billinguc "legalbot/services/internal/billing/usecase"
@@ -26,6 +27,7 @@ type AnalyzeHandler struct {
 	checkLimits *billinguc.CheckLimitsUseCase
 	recordUsage *billinguc.RecordUsageUseCase
 	userRepo    authdomain.UserRepository
+	saveAnalys  *analysisuc.SaveAnalysisUseCase
 }
 
 func NewAnalyzeHandler(
@@ -33,12 +35,14 @@ func NewAnalyzeHandler(
 	checkLimits *billinguc.CheckLimitsUseCase,
 	recordUsage *billinguc.RecordUsageUseCase,
 	userRepo authdomain.UserRepository,
+	saveAnalys *analysisuc.SaveAnalysisUseCase,
 ) *AnalyzeHandler {
 	return &AnalyzeHandler{
 		ragClient:   ragClient,
 		checkLimits: checkLimits,
 		recordUsage: recordUsage,
 		userRepo:    userRepo,
+		saveAnalys:  saveAnalys,
 	}
 }
 
@@ -55,12 +59,14 @@ func (h *AnalyzeHandler) handleAnalyzeStream(w http.ResponseWriter, r *http.Requ
 
 	// Auth & billing
 	userID, hasUser := middleware.GetUserID(ctx)
+	var parsedUserID uuid.UUID
 	if hasUser {
 		parsed, err := uuid.Parse(userID)
 		if err != nil {
 			http.Error(w, "invalid user ID in token", http.StatusUnauthorized)
 			return
 		}
+		parsedUserID = parsed
 		limitsResp, err := h.checkLimits.Execute(ctx, billinguc.CheckLimitsRequest{
 			UserID:       parsed,
 			ResourceType: "requests",
@@ -69,7 +75,6 @@ func (h *AnalyzeHandler) handleAnalyzeStream(w http.ResponseWriter, r *http.Requ
 		if err != nil {
 			log.Printf("[analyze] check_limits error: %v", err)
 		} else if !limitsResp.Allowed {
-			// Лимит исчерпан — последний шанс для админа (ленивый lookup)
 			if !authuc.IsAdmin(ctx, h.userRepo, parsed) {
 				http.Error(w, "limit exceeded", http.StatusPaymentRequired)
 				return
@@ -79,7 +84,6 @@ func (h *AnalyzeHandler) handleAnalyzeStream(w http.ResponseWriter, r *http.Requ
 
 	r.Body = http.MaxBytesReader(w, r.Body, analyzeMaxUploadBytes)
 
-	// Parse multipart from client
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		var maxBytesErr *http.MaxBytesError
 		if errors.As(err, &maxBytesErr) {
@@ -99,7 +103,6 @@ func (h *AnalyzeHandler) handleAnalyzeStream(w http.ResponseWriter, r *http.Requ
 		topK = "10"
 	}
 
-	// Read uploaded file if present
 	var fileData io.Reader
 	var filename string
 	file, header, err := r.FormFile("file")
@@ -114,7 +117,6 @@ func (h *AnalyzeHandler) handleAnalyzeStream(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// SSE headers
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "streaming not supported", http.StatusInternalServerError)
@@ -127,7 +129,6 @@ func (h *AnalyzeHandler) handleAnalyzeStream(w http.ResponseWriter, r *http.Requ
 
 	writeSSE(w, flusher, map[string]any{"type": "thinking", "text": "Извлекаю текст и ищу релевантные нормы..."})
 
-	// Forward to RAG /analyze/stream
 	topKInt := 10
 	fmt.Sscanf(topK, "%d", &topKInt)
 
@@ -142,7 +143,13 @@ func (h *AnalyzeHandler) handleAnalyzeStream(w http.ResponseWriter, r *http.Requ
 
 	writeSSE(w, flusher, map[string]any{"type": "thinking", "text": "Анализирую рекламный материал..."})
 
-	// Proxy SSE events from RAG to client
+	// Аккумулируем нужные события — для последующего сохранения в историю.
+	var (
+		capturedAdText    string
+		capturedResult    json.RawMessage
+		capturedCitations json.RawMessage
+	)
+
 	scanner := bufio.NewScanner(ragResp.Body)
 	scanner.Buffer(make([]byte, 512*1024), 512*1024)
 	streamCompleted := false
@@ -161,12 +168,21 @@ func (h *AnalyzeHandler) handleAnalyzeStream(w http.ResponseWriter, r *http.Requ
 		var event struct {
 			Type string          `json:"type"`
 			Data json.RawMessage `json:"data"`
+			Text string          `json:"text"`
 		}
 		if err := json.Unmarshal([]byte(payload), &event); err != nil {
 			continue
 		}
 
-		// Forward all events as-is
+		switch event.Type {
+		case "ad_text":
+			capturedAdText = event.Text
+		case "result":
+			capturedResult = append(capturedResult[:0], event.Data...)
+		case "citations":
+			capturedCitations = append(capturedCitations[:0], event.Data...)
+		}
+
 		writeSSE(w, flusher, json.RawMessage(payload))
 	}
 	if err := scanner.Err(); err != nil {
@@ -176,15 +192,35 @@ func (h *AnalyzeHandler) handleAnalyzeStream(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Record usage
-	if hasUser && streamCompleted {
-		parsed, _ := uuid.Parse(userID)
-		if err := h.recordUsage.Execute(ctx, billinguc.RecordUsageRequest{
-			UserID:       parsed,
-			ResourceType: "requests",
-			Amount:       1,
-		}); err != nil {
-			log.Printf("[analyze] record_usage error: %v", err)
+	// Save analysis & record usage только при успешном анализе.
+	if streamCompleted {
+		if hasUser {
+			if err := h.recordUsage.Execute(ctx, billinguc.RecordUsageRequest{
+				UserID:       parsedUserID,
+				ResourceType: "requests",
+				Amount:       1,
+			}); err != nil {
+				log.Printf("[analyze] record_usage error: %v", err)
+			}
+
+			// Persist в историю — только если есть и текст и результат.
+			if h.saveAnalys != nil && capturedAdText != "" && len(capturedResult) > 0 {
+				saved, err := h.saveAnalys.Execute(ctx, analysisuc.SaveRequest{
+					UserID:    parsedUserID,
+					AdText:    capturedAdText,
+					Result:    capturedResult,
+					Citations: capturedCitations,
+				})
+				if err != nil {
+					log.Printf("[analyze] save history error: %v", err)
+				} else {
+					writeSSE(w, flusher, map[string]any{
+						"type":  "saved",
+						"id":    saved.ID.String(),
+						"title": saved.Title,
+					})
+				}
+			}
 		}
 	}
 
