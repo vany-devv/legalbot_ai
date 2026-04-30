@@ -88,7 +88,9 @@ def _extract_text(content: bytes, filename: str) -> str:
         from docx import Document
 
         doc = Document(BytesIO(content))
-        return "\n".join(p.text for p in doc.paragraphs)
+        # \n\n между абзацами — чтобы можно было разбить материал на <p>;
+        # пустые параграфы отбрасываем, не плодим лишние разрывы.
+        return "\n\n".join(p.text for p in doc.paragraphs if p.text.strip())
     if name.endswith(".rtf"):
         import re as _re
 

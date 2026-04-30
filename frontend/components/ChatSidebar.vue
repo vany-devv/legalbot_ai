@@ -62,6 +62,8 @@
       class="flex-1 overflow-y-auto px-2 py-1 transition-opacity duration-150"
       :class="sidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'"
     >
+      <!-- ─── Чаты ─────────────────────────────────────── -->
+      <div class="sidebar-section-label">Диалоги</div>
       <div v-if="!conversations.length" class="sidebar-nav-item cursor-default opacity-60 pointer-events-none">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0 opacity-60">
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
@@ -85,6 +87,42 @@
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
         </svg>
         <span class="truncate">{{ conv.title }}</span>
+      </div>
+
+      <!-- ─── Анализы ──────────────────────────────────── -->
+      <div class="sidebar-section-label mt-3">Анализы рекламы</div>
+      <div v-if="!analyses.length" class="sidebar-nav-item cursor-default opacity-60 pointer-events-none">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0 opacity-60">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+        <span class="sidebar-label text-ink-faint text-xs" :class="sidebarOpen ? 'label-show' : 'label-hide'">Нет анализов</span>
+      </div>
+      <div
+        v-for="a in analyses"
+        :key="a.id"
+        class="group relative flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer text-sm transition-all duration-150 mb-0.5 overflow-hidden"
+        :class="a.id === currentAnalysisId
+          ? 'bg-brand-dim text-ink'
+          : 'text-ink-muted hover:bg-panel hover:text-ink'"
+        @click="handleOpenAnalysis(a.id)"
+      >
+        <span
+          v-if="a.id === currentAnalysisId"
+          class="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-brand rounded-r-full"
+        />
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0 opacity-50">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+        <span class="truncate flex-1">{{ a.title }}</span>
+        <button
+          class="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded text-ink-faint hover:text-danger opacity-0 group-hover:opacity-100 transition-opacity"
+          title="Удалить"
+          @click.stop="confirmDeleteAnalysis(a.id)"
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
       </div>
     </div>
 
@@ -164,13 +202,18 @@
 
 <script setup lang="ts">
 const { conversations, currentConversationId, newChat, loadConversations } = useChat()
+const { items: analyses, currentId: currentAnalysisId, loadList: loadAnalyses, remove: removeAnalysis } = useAnalysisHistory()
 const { user, isLoggedIn, isAdmin, logout } = useAuth()
 const { sidebarOpen, sidebarReady, toggle } = useSidebar()
 const { theme, toggle: toggleTheme } = useTheme()
 const router = useRouter()
 
 onMounted(async () => {
-  await loadConversations()
+  await Promise.all([loadConversations(), loadAnalyses()])
+})
+
+watch(isLoggedIn, async (next) => {
+  if (next) await loadAnalyses()
 })
 
 function handleNewChat() {
@@ -180,6 +223,15 @@ function handleNewChat() {
 
 function handleOpen(id: string) {
   router.push(`/chat/${id}`)
+}
+
+function handleOpenAnalysis(id: string) {
+  router.push(`/analyze?id=${id}`)
+}
+
+async function confirmDeleteAnalysis(id: string) {
+  if (!confirm('Удалить этот анализ?')) return
+  await removeAnalysis(id)
 }
 </script>
 
@@ -203,6 +255,15 @@ function handleOpen(id: string) {
 .sidebar-nav-active {
   color: var(--text-primary) !important;
   background: var(--bg-secondary);
+}
+
+.sidebar-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  padding: 6px 12px 4px;
 }
 
 /* max-width has no transition — layout collapses instantly on hide,

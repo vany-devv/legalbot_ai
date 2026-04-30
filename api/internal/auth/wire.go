@@ -39,9 +39,12 @@ func Wire(
 	getMeUC := usecase.NewGetMeUseCase(userRepo, tokenGenerator)
 	changePasswordUC := usecase.NewChangePasswordUseCase(userRepo, sessionRepo, passwordHasher)
 	logoutUC := usecase.NewLogoutUseCase(sessionRepo)
+	updatePrefsUC := usecase.NewUpdatePreferencesUseCase(userRepo)
 
 	return &Module{
-		Handler:     handler.NewAuthHandler(registerUC, loginUC, getMeUC, changePasswordUC, logoutUC),
+		Handler: handler.NewAuthHandler(
+			registerUC, loginUC, getMeUC, changePasswordUC, logoutUC, updatePrefsUC,
+		),
 		UserRepo:    userRepo,
 		SessionRepo: sessionRepo,
 	}

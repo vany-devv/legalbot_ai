@@ -19,6 +19,8 @@ const citations = ref<Citation[]>([])
 const result = ref<AnalyzeResult | null>(null)
 const analyzing = ref(false)
 const error = ref<string | null>(null)
+const materialText = ref<string>('')
+const savedId = ref<string | null>(null)
 
 export function useAnalyze() {
   const config = useRuntimeConfig()
@@ -31,6 +33,27 @@ export function useAnalyze() {
     result.value = null
     error.value = null
     analyzing.value = false
+    materialText.value = ''
+    savedId.value = null
+  }
+
+  // Подгружаем сохранённый анализ напрямую в состояние (без стрима).
+  function loadSaved(payload: {
+    id: string
+    ad_text: string
+    result: any
+    citations?: any[]
+  }) {
+    reset()
+    savedId.value = payload.id
+    materialText.value = payload.ad_text || ''
+    result.value = payload.result as AnalyzeResult
+    citations.value = (payload.citations || []).map((c: any) => ({
+      id: c.chunk_id ?? c.id,
+      score: c.retrieval_score ?? c.score,
+      quote: c.content ?? c.quote,
+      meta: c.meta || {},
+    }))
   }
 
   async function analyze(text: string | null, file: File | null, topK = 10) {
@@ -88,6 +111,9 @@ export function useAnalyze() {
           try { event = JSON.parse(payload) } catch { continue }
 
           switch (event.type) {
+            case 'ad_text':
+              materialText.value = event.text || ''
+              break
             case 'thinking':
               thinking.value = [...thinking.value, { text: event.text }]
               break
@@ -102,6 +128,17 @@ export function useAnalyze() {
                 meta: c.meta || {},
               }))
               break
+            case 'saved': {
+              savedId.value = event.id || null
+              if (event.id) {
+                useAnalysisHistory().prepend({
+                  id: event.id,
+                  title: event.title || 'Без названия',
+                  created_at: new Date().toISOString(),
+                })
+              }
+              break
+            }
             case 'error':
               error.value = event.text
               break
@@ -122,7 +159,10 @@ export function useAnalyze() {
     result: readonly(result),
     analyzing: readonly(analyzing),
     error: readonly(error),
+    materialText: readonly(materialText),
+    savedId: readonly(savedId),
     analyze,
     reset,
+    loadSaved,
   }
 }

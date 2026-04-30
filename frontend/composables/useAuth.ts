@@ -2,6 +2,7 @@ interface User {
   id: string
   email: string
   role: string
+  preferred_palette?: string
 }
 
 const authRoutes = ['/auth/login', '/auth/register']
@@ -130,6 +131,11 @@ export function useAuth() {
       initialized.value = true
       await fetchMe()
       await useBilling().refresh()
+
+      if (user.value?.preferred_palette) {
+        const { set: setPalette } = usePalette()
+        await setPalette(user.value.preferred_palette as any, { sync: false })
+      }
     } finally {
       loading.value = false
     }
@@ -151,10 +157,20 @@ export function useAuth() {
   async function fetchMe() {
     if (!token.value) return
     try {
-      const res = await $fetch<{ ID: string; Email: string; Role: string }>(`${api}/auth/me`, {
+      const res = await $fetch<{
+        ID: string
+        Email: string
+        Role: string
+        PreferredPalette: string
+      }>(`${api}/auth/me`, {
         headers: authHeaders(),
       })
-      user.value = { id: res.ID, email: res.Email, role: res.Role || 'user' }
+      user.value = {
+        id: res.ID,
+        email: res.Email,
+        role: res.Role || 'user',
+        preferred_palette: res.PreferredPalette || 'navy',
+      }
     } catch (e: any) {
       if (e?.status === 401 || e?.statusCode === 401) {
         await handleUnauthorized()
