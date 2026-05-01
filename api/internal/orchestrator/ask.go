@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 
@@ -16,6 +15,7 @@ import (
 	chatdomain "legalbot/services/internal/chat/domain"
 	chatuc "legalbot/services/internal/chat/usecase"
 	"legalbot/services/internal/middleware"
+	"legalbot/services/internal/pkg/logger"
 	"legalbot/services/internal/ragclient"
 )
 
@@ -103,7 +103,7 @@ func (h *AskHandler) checkBilling(r *http.Request, userUUID uuid.UUID) bool {
 		Amount:       1,
 	})
 	if err != nil {
-		log.Printf("[ask] check_limits error: %v", err)
+		logger.FromCtx(r.Context()).Error("check_limits_failed", "err", err)
 		return true
 	}
 	if limitsResp.Allowed {
@@ -127,7 +127,7 @@ func (h *AskHandler) ensureConversation(r *http.Request, userUUID uuid.UUID, que
 		Title:  truncate(query, 100),
 	})
 	if err != nil {
-		log.Printf("[ask] create_conversation error: %v", err)
+		logger.FromCtx(r.Context()).Error("create_conversation_failed", "err", err)
 		return uuid.Nil
 	}
 	return convResp.ConversationID
@@ -143,7 +143,7 @@ func (h *AskHandler) saveUserMessage(r *http.Request, userUUID, convID uuid.UUID
 		Role:           "user",
 		Content:        query,
 	}); err != nil {
-		log.Printf("[ask] save user message error: %v", err)
+		logger.FromCtx(r.Context()).Error("save_user_message_failed", "err", err)
 	}
 }
 
@@ -153,7 +153,7 @@ func (h *AskHandler) recordUsageSafe(r *http.Request, userUUID uuid.UUID) {
 		ResourceType: "requests",
 		Amount:       1,
 	}); err != nil {
-		log.Printf("[ask] record_usage error: %v", err)
+		logger.FromCtx(r.Context()).Error("record_usage_failed", "err", err)
 	}
 }
 
@@ -174,6 +174,7 @@ func (h *AskHandler) handleAsk(w http.ResponseWriter, r *http.Request) {
 	if req.TopK <= 0 {
 		req.TopK = 8
 	}
+	logger.FromCtx(ctx).Info("ask_received", "top_k", req.TopK, "query_len", len(req.Query), "has_conv_id", req.ConversationID != "", "stream", false)
 
 	userID, hasUser := middleware.GetUserID(ctx)
 	var userUUID uuid.UUID
@@ -224,7 +225,7 @@ func (h *AskHandler) handleAsk(w http.ResponseWriter, r *http.Request) {
 			Citations:      citData,
 		})
 		if err != nil {
-			log.Printf("[ask] save assistant message error: %v", err)
+			logger.FromCtx(ctx).Error("save_assistant_message_failed", "err", err)
 		} else {
 			messageID = msgResp.MessageID
 		}
@@ -272,6 +273,7 @@ func (h *AskHandler) handleAskStream(w http.ResponseWriter, r *http.Request) {
 	if req.TopK <= 0 {
 		req.TopK = 8
 	}
+	logger.FromCtx(ctx).Info("ask_received", "top_k", req.TopK, "query_len", len(req.Query), "has_conv_id", req.ConversationID != "", "stream", true)
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -392,7 +394,7 @@ func (h *AskHandler) handleAskStream(w http.ResponseWriter, r *http.Request) {
 			Citations:      citData,
 		})
 		if err != nil {
-			log.Printf("[ask/stream] save assistant message error: %v", err)
+			logger.FromCtx(ctx).Error("save_assistant_message_failed", "stream", true, "err", err)
 		} else {
 			msgID = msgResp.MessageID.String()
 		}

@@ -5,6 +5,8 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"strings"
+
+	"legalbot/services/internal/pkg/logger"
 )
 
 type RAGProxy struct {
@@ -24,6 +26,15 @@ func NewRAGProxy(rawURL string, ingestAPIKey string) *RAGProxy {
 		if ingestAPIKey != "" {
 			req.Header.Set("X-Api-Key", ingestAPIKey)
 		}
+		// Пробрасываем X-Request-ID в RAG, чтобы корреляция работала на всю цепочку.
+		if rid := logger.RequestID(req.Context()); rid != "" {
+			req.Header.Set("X-Request-ID", rid)
+		}
+	}
+
+	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+		logger.FromCtx(r.Context()).Error("rag_proxy_failed", "path", r.URL.Path, "err", err)
+		http.Error(w, "rag service unavailable", http.StatusBadGateway)
 	}
 
 	return &RAGProxy{proxy: proxy}

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 
@@ -17,6 +16,7 @@ import (
 	authuc "legalbot/services/internal/auth/usecase"
 	billinguc "legalbot/services/internal/billing/usecase"
 	"legalbot/services/internal/middleware"
+	"legalbot/services/internal/pkg/logger"
 	"legalbot/services/internal/ragclient"
 )
 
@@ -73,14 +73,16 @@ func (h *AnalyzeHandler) handleAnalyzeStream(w http.ResponseWriter, r *http.Requ
 			Amount:       1,
 		})
 		if err != nil {
-			log.Printf("[analyze] check_limits error: %v", err)
+			logger.FromCtx(ctx).Error("check_limits_failed", "err", err)
 		} else if !limitsResp.Allowed {
 			if !authuc.IsAdmin(ctx, h.userRepo, parsed) {
+				logger.FromCtx(ctx).Info("billing_limit_hit", "resource", "requests")
 				http.Error(w, "limit exceeded", http.StatusPaymentRequired)
 				return
 			}
 		}
 	}
+	logger.FromCtx(ctx).Info("analyze_received")
 
 	r.Body = http.MaxBytesReader(w, r.Body, analyzeMaxUploadBytes)
 
@@ -200,7 +202,7 @@ func (h *AnalyzeHandler) handleAnalyzeStream(w http.ResponseWriter, r *http.Requ
 				ResourceType: "requests",
 				Amount:       1,
 			}); err != nil {
-				log.Printf("[analyze] record_usage error: %v", err)
+				logger.FromCtx(ctx).Error("record_usage_failed", "err", err)
 			}
 
 			// Persist в историю — только если есть и текст и результат.
@@ -212,8 +214,9 @@ func (h *AnalyzeHandler) handleAnalyzeStream(w http.ResponseWriter, r *http.Requ
 					Citations: capturedCitations,
 				})
 				if err != nil {
-					log.Printf("[analyze] save history error: %v", err)
+					logger.FromCtx(ctx).Error("save_analysis_failed", "err", err)
 				} else {
+					logger.FromCtx(ctx).Info("analyze_completed", "analysis_id", saved.ID.String())
 					writeSSE(w, flusher, map[string]any{
 						"type":  "saved",
 						"id":    saved.ID.String(),

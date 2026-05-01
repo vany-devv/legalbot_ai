@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"legalbot/services/internal/auth/domain"
+	"legalbot/services/internal/pkg/logger"
 )
 
 type LoginUseCase struct {
@@ -48,11 +49,13 @@ func (uc *LoginUseCase) Execute(ctx context.Context, req LoginRequest) (*LoginRe
 
 	user, err := uc.userRepo.FindByEmail(ctx, req.Email)
 	if err != nil {
+		logger.FromCtx(ctx).Warn("login_failed", "reason", "user_not_found", "email_domain", emailDomain(req.Email))
 		return nil, errors.New("invalid email or password")
 	}
 
 	// Проверка пароля
 	if err := uc.passwordHasher.Compare(user.PasswordHash, req.Password); err != nil {
+		logger.FromCtx(ctx).Warn("login_failed", "reason", "bad_password", "user_id", user.ID.String())
 		return nil, errors.New("invalid email or password")
 	}
 
@@ -74,6 +77,8 @@ func (uc *LoginUseCase) Execute(ctx context.Context, req LoginRequest) (*LoginRe
 	if err := uc.sessionRepo.Create(ctx, session); err != nil {
 		return nil, fmt.Errorf("failed to create session: %w", err)
 	}
+
+	logger.FromCtx(ctx).Info("login_succeeded", "user_id", user.ID.String())
 
 	return &LoginResponse{
 		Token:     token,

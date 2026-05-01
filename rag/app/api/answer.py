@@ -105,13 +105,19 @@ async def answer(
     retriever: HybridRetriever = Depends(get_retriever),
     llm: LLMProvider = Depends(get_llm),
 ) -> AnswerResponse:
+    logger.info("answer_request", extra={"top_k": req.top_k, "query_len": len(req.query), "stream": False})
     results = await retriever.search(req.query, top_k=req.top_k)
+    logger.info("answer_retrieved", extra={"hits": len(results)})
     context = _build_context(results)
     user_msg = LEGAL_USER_TEMPLATE.format(query=req.query, context=context)
     text = await llm.complete(system=LEGAL_SYSTEM_PROMPT, user=user_msg)
     all_citations = _citations(results)
     used_citations = _filter_used_citations(text, all_citations)
     provider, model = _llm_metadata(llm)
+    logger.info(
+        "answer_generated",
+        extra={"provider": provider, "model": model, "answer_len": len(text), "citations_used": len(used_citations)},
+    )
     return AnswerResponse(answer=text, citations=used_citations, provider=provider, model=model)
 
 
@@ -121,7 +127,9 @@ async def answer_stream(
     retriever: HybridRetriever = Depends(get_retriever),
     llm: LLMProvider = Depends(get_llm),
 ) -> StreamingResponse:
+    logger.info("answer_request", extra={"top_k": req.top_k, "query_len": len(req.query), "stream": True})
     results = await retriever.search(req.query, top_k=req.top_k)
+    logger.info("answer_retrieved", extra={"hits": len(results)})
     context = _build_context(results)
     user_msg = LEGAL_USER_TEMPLATE.format(query=req.query, context=context)
     all_citations = _citations(results)

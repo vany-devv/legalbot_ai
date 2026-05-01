@@ -278,6 +278,7 @@ async def analyze(
     repo: VectorRepository = Depends(get_vector_repo),
     llm: LLMProvider = Depends(get_llm),
 ) -> AnalyzeResponse:
+    logger.info("analyze_started", extra={"top_k": top_k, "has_file": file is not None, "stream": False})
     ad_text = await _resolve_ad_text(text, file)
     if len(ad_text) > MAX_AD_TEXT_LEN:
         ad_text = ad_text[:MAX_AD_TEXT_LEN]
@@ -311,10 +312,12 @@ async def analyze(
     parsed = _parse_json(raw)
     risks = parsed.get("risks", [])
     logger.info(
-        "[ANALYZE] result: overall=%s  risks=%d  -> %s",
-        parsed.get("overall_risk_level"),
-        len(risks),
-        [r.get("law_reference") for r in risks],
+        "analyze_completed",
+        extra={
+            "overall": parsed.get("overall_risk_level"),
+            "risks_count": len(risks),
+            "category": classification.get("category"),
+        },
     )
 
     return AnalyzeResponse(
@@ -334,6 +337,7 @@ async def analyze_stream(
     repo: VectorRepository = Depends(get_vector_repo),
     llm: LLMProvider = Depends(get_llm),
 ) -> StreamingResponse:
+    logger.info("analyze_started", extra={"top_k": top_k, "has_file": file is not None, "stream": True})
     ad_text = await _resolve_ad_text(text, file)
     if len(ad_text) > MAX_AD_TEXT_LEN:
         ad_text = ad_text[:MAX_AD_TEXT_LEN]
@@ -378,10 +382,12 @@ async def analyze_stream(
         parsed = _parse_json(raw)
         risks = parsed.get("risks", [])
         logger.info(
-            "[ANALYZE] result: overall=%s  risks=%d  -> %s",
-            parsed.get("overall_risk_level"),
-            len(risks),
-            [r.get("law_reference") for r in risks],
+            "analyze_completed",
+            extra={
+                "overall": parsed.get("overall_risk_level"),
+                "risks_count": len(risks),
+                "category": category,
+            },
         )
 
         yield _event({"type": "result", "data": parsed})

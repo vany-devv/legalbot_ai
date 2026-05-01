@@ -1,8 +1,9 @@
 package main
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
+	"os"
 
 	"legalbot/services/internal/analysis"
 	"legalbot/services/internal/auth"
@@ -13,6 +14,7 @@ import (
 	"legalbot/services/internal/orchestrator"
 	"legalbot/services/internal/pkg/config"
 	"legalbot/services/internal/pkg/db"
+	"legalbot/services/internal/pkg/logger"
 	"legalbot/services/internal/pkg/migrate"
 	"legalbot/services/internal/proxy"
 	"legalbot/services/internal/ragclient"
@@ -21,16 +23,21 @@ import (
 func main() {
 	cfg := config.Load()
 
+	log := logger.New(cfg.Env)
+	slog.SetDefault(log)
+
 	database, err := db.NewPostgres(cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		log.Error("db_connect_failed", "err", err)
+		os.Exit(1)
 	}
 	defer database.Close()
 
 	if err := migrate.Up(database.DB); err != nil {
-		log.Fatalf("Migrations failed: %v", err)
+		log.Error("migrations_failed", "err", err)
+		os.Exit(1)
 	}
-	log.Println("Migrations applied successfully")
+	log.Info("migrations_applied")
 
 	mux := http.NewServeMux()
 
@@ -77,17 +84,21 @@ func main() {
 	)
 	analyzeHandler.RegisterRoutes(mux)
 
-	// Auth middleware wraps all routes
+	// Middleware chain: RequestID -> Access -> Auth -> mux
 	tokenGen := infrastructure.NewJWTTokenGenerator(cfg.JWTSecret)
 	publicPaths := []string{
 		"/api/auth/register",
 		"/api/auth/login",
 		"/api/rag/health",
 	}
-	handler := middleware.Auth(mux, tokenGen, authModule.SessionRepo, publicPaths)
+	var handler http.Handler = mux
+	handler = middleware.Auth(handler, tokenGen, authModule.SessionRepo, publicPaths)
+	handler = middleware.Access(handler)
+	handler = middleware.RequestID(handler)
 
-	log.Printf("Server starting on :%s (RAG service: %s)\n", cfg.Port, cfg.RAGServiceURL)
+	log.Info("server_starting", "port", cfg.Port, "rag_url", cfg.RAGServiceURL, "env", cfg.Env)
 	if err := http.ListenAndServe(":"+cfg.Port, handler); err != nil {
-		log.Fatalf("Server failed: %v", err)
+		log.Error("server_failed", "err", err)
+		os.Exit(1)
 	}
 }

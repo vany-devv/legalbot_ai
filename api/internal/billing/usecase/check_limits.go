@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"legalbot/services/internal/billing/domain"
+	"legalbot/services/internal/pkg/logger"
 
 	"github.com/google/uuid"
 )
@@ -88,6 +89,13 @@ func (uc *CheckLimitsUseCase) Execute(ctx context.Context, req CheckLimitsReques
 
 	// Проверка лимита
 	if used+req.Amount > limit {
+		logger.FromCtx(ctx).Info("billing_limit_hit",
+			"user_id", req.UserID.String(),
+			"resource", req.ResourceType,
+			"used", used,
+			"limit", limit,
+			"plan", plan.Slug,
+		)
 		return &CheckLimitsResponse{
 			Allowed: false,
 			Reason:  "limit exceeded",

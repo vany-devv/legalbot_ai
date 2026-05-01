@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"regexp"
 	"strings"
 	"time"
@@ -12,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"legalbot/services/internal/auth/domain"
 	billingdomain "legalbot/services/internal/billing/domain"
+	"legalbot/services/internal/pkg/logger"
 )
 
 var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
@@ -88,17 +88,28 @@ func (uc *RegisterUseCase) Execute(ctx context.Context, req RegisterRequest) (*R
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
+	logger.FromCtx(ctx).Info("user_registered", "user_id", user.ID.String(), "email_domain", emailDomain(user.Email))
+
 	// Auto-subscribe на Free-тариф (бесконечная подписка, ExpiresAt = nil)
 	if err := uc.subscribeFree(ctx, user.ID); err != nil {
 		// Не валим регистрацию, если что-то пошло не так с подпиской — логируем
 		// и идём дальше. Бэкфилл-миграция и /api/billing/me лечат такие случаи.
-		log.Printf("auth/register: failed to auto-subscribe user %s on Free: %v", user.ID, err)
+		logger.FromCtx(ctx).Error("auto_subscribe_failed", "user_id", user.ID.String(), "err", err)
 	}
 
 	return &RegisterResponse{
 		UserID: user.ID,
 		Email:  user.Email,
 	}, nil
+}
+
+// emailDomain возвращает часть после @ — пишем в логи вместо полного email.
+func emailDomain(email string) string {
+	i := strings.LastIndex(email, "@")
+	if i < 0 {
+		return ""
+	}
+	return email[i+1:]
 }
 
 func (uc *RegisterUseCase) subscribeFree(ctx context.Context, userID uuid.UUID) error {

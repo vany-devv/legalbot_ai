@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"legalbot/services/internal/auth/domain"
+	"legalbot/services/internal/pkg/logger"
 )
 
 type ChangePasswordUseCase struct {
@@ -48,6 +49,7 @@ func (uc *ChangePasswordUseCase) Execute(ctx context.Context, req ChangePassword
 	}
 
 	if err := uc.passwordHasher.Compare(user.PasswordHash, req.CurrentPassword); err != nil {
+		logger.FromCtx(ctx).Warn("change_password_failed", "reason", "bad_current", "user_id", req.UserID.String())
 		return errors.New("current password is incorrect")
 	}
 
@@ -63,5 +65,6 @@ func (uc *ChangePasswordUseCase) Execute(ctx context.Context, req ChangePassword
 
 	_ = uc.sessionRepo.DeleteByUserID(ctx, req.UserID)
 
+	logger.FromCtx(ctx).Info("password_changed", "user_id", req.UserID.String())
 	return nil
 }

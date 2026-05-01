@@ -9,7 +9,26 @@ import (
 	"mime/multipart"
 	"net/http"
 	"time"
+
+	"legalbot/services/internal/pkg/logger"
 )
+
+const requestIDHeader = "X-Request-ID"
+
+// setRequestID копирует X-Request-ID из контекста в исходящий запрос —
+// чтобы в логах RAG-сервиса можно было найти ту же операцию по тому же id.
+func setRequestID(ctx context.Context, req *http.Request) {
+	if rid := logger.RequestID(ctx); rid != "" {
+		req.Header.Set(requestIDHeader, rid)
+	}
+}
+
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "..."
+}
 
 type Client struct {
 	baseURL    string
@@ -62,15 +81,21 @@ func (c *Client) Answer(ctx context.Context, query string, topK int) (*AnswerRes
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	setRequestID(ctx, req)
+
+	log := logger.FromCtx(ctx)
+	start := time.Now()
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		log.Error("rag_call_failed", "endpoint", "/answer", "err", err)
 		return nil, fmt.Errorf("call RAG service: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		log.Error("rag_call_failed", "endpoint", "/answer", "status", resp.StatusCode, "body", truncate(string(body), 256))
 		return nil, fmt.Errorf("RAG service returned %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -79,6 +104,15 @@ func (c *Client) Answer(ctx context.Context, query string, topK int) (*AnswerRes
 		return nil, fmt.Errorf("decode RAG response: %w", err)
 	}
 
+	log.Info("rag_call",
+		"endpoint", "/answer",
+		"status", resp.StatusCode,
+		"duration_ms", time.Since(start).Milliseconds(),
+		"top_k", topK,
+		"citations", len(result.Citations),
+		"provider", result.Provider,
+		"model", result.Model,
+	)
 	return &result, nil
 }
 
@@ -97,17 +131,23 @@ func (c *Client) AnswerStream(ctx context.Context, query string, topK int) (*htt
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "text/event-stream")
+	setRequestID(ctx, req)
+
+	log := logger.FromCtx(ctx)
 
 	// No timeout for streaming
 	resp, err := (&http.Client{}).Do(req)
 	if err != nil {
+		log.Error("rag_call_failed", "endpoint", "/answer/stream", "err", err)
 		return nil, fmt.Errorf("call RAG stream: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
+		log.Error("rag_call_failed", "endpoint", "/answer/stream", "status", resp.StatusCode, "body", truncate(string(body), 256))
 		return nil, fmt.Errorf("RAG service returned %d: %s", resp.StatusCode, string(body))
 	}
+	log.Info("rag_call", "endpoint", "/answer/stream", "status", resp.StatusCode, "top_k", topK)
 	return resp, nil
 }
 
@@ -152,16 +192,22 @@ func (c *Client) AnalyzeStream(ctx context.Context, text string, fileData io.Rea
 	}
 	req.Header.Set("Content-Type", contentType)
 	req.Header.Set("Accept", "text/event-stream")
+	setRequestID(ctx, req)
+
+	log := logger.FromCtx(ctx)
 
 	resp, err := (&http.Client{}).Do(req)
 	if err != nil {
+		log.Error("rag_call_failed", "endpoint", "/analyze/stream", "err", err)
 		return nil, fmt.Errorf("call RAG analyze stream: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
+		log.Error("rag_call_failed", "endpoint", "/analyze/stream", "status", resp.StatusCode, "body", truncate(string(body), 256))
 		return nil, fmt.Errorf("RAG analyze returned %d: %s", resp.StatusCode, string(body))
 	}
+	log.Info("rag_call", "endpoint", "/analyze/stream", "status", resp.StatusCode, "top_k", topK, "has_file", filename != "")
 	return resp, nil
 }
 
@@ -170,6 +216,7 @@ func (c *Client) Health(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
+	setRequestID(ctx, req)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
