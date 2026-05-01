@@ -69,25 +69,46 @@ class GigaChatProvider(LLMProvider):
     )
     async def complete(self, system: str, user: str, max_tokens: int = 2048) -> str:
         token = await self._auth.get_token()
+        import time as _t
+        start = _t.perf_counter()
         async with httpx.AsyncClient(timeout=60, verify=False) as client:
-            resp = await client.post(
-                _API_URL,
-                headers={"Authorization": f"Bearer {token}"},
-                json={
+            try:
+                resp = await client.post(
+                    _API_URL,
+                    headers={"Authorization": f"Bearer {token}"},
+                    json={
+                        "model": self._model,
+                        "messages": [
+                            {"role": "system", "content": system},
+                            {"role": "user", "content": user},
+                        ],
+                        "max_tokens": max_tokens,
+                        "stream": False,
+                    },
+                )
+                resp.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                logger.error(
+                    "llm_failed",
+                    extra={"provider": "gigachat", "model": self._model, "status": e.response.status_code},
+                )
+                raise
+            content = resp.json()["choices"][0]["message"]["content"]
+            logger.info(
+                "llm_call",
+                extra={
+                    "provider": "gigachat",
                     "model": self._model,
-                    "messages": [
-                        {"role": "system", "content": system},
-                        {"role": "user", "content": user},
-                    ],
-                    "max_tokens": max_tokens,
+                    "duration_ms": int((_t.perf_counter() - start) * 1000),
+                    "answer_len": len(content),
                     "stream": False,
                 },
             )
-            resp.raise_for_status()
-            return resp.json()["choices"][0]["message"]["content"]
+            return content
 
     async def stream(self, system: str, user: str) -> AsyncIterator[str]:
         token = await self._auth.get_token()
+        logger.info("llm_call", extra={"provider": "gigachat", "model": self._model, "stream": True})
         async with httpx.AsyncClient(timeout=120, verify=False) as client:
             async with client.stream(
                 "POST",

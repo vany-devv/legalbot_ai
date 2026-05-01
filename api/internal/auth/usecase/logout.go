@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"legalbot/services/internal/auth/domain"
+	"legalbot/services/internal/pkg/logger"
 )
 
 type LogoutUseCase struct {
@@ -19,5 +20,9 @@ func (uc *LogoutUseCase) Execute(ctx context.Context, token string) error {
 	if err != nil {
 		return err
 	}
-	return uc.sessionRepo.Delete(ctx, session.ID)
+	if err := uc.sessionRepo.Delete(ctx, session.ID); err != nil {
+		return err
+	}
+	logger.FromCtx(ctx).Info("logout", "user_id", session.UserID.String())
+	return nil
 }

@@ -177,12 +177,18 @@ async def _run_ingest_job(
         ]
         job.chunks_added = await repo.add_chunks(doc_id, chunk_data)
         job.status = "done"
-        logger.info("Job %s: done — %d chunks added", job_id, job.chunks_added)
+        logger.info(
+            "ingest_completed",
+            extra={"job_id": job_id, "source_id": source_id, "chunks_added": job.chunks_added},
+        )
 
     except Exception as exc:
         job.status = "failed"
         job.error = str(exc)
-        logger.exception("Job %s failed: %s", job_id, exc)
+        logger.exception(
+            "ingest_failed",
+            extra={"job_id": job_id, "source_id": source_id},
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -224,7 +230,10 @@ async def ingest_upload(
         job_id, source_id, title, doc_type, text, year, {}, repo, embedder,
     )
 
-    logger.info("Job %s created for '%s'", job_id, source_id)
+    logger.info(
+        "ingest_started",
+        extra={"job_id": job_id, "source_id": source_id, "filename": file.filename, "size": len(content)},
+    )
     return _job_to_response(_jobs[job_id])
 
 
