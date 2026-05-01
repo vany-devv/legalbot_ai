@@ -377,8 +377,8 @@
 <script setup lang="ts">
 useHead({ title: 'Анализ рекламы' })
 
-const { thinking, citations, result, analyzing, error, materialText, savedId, analyze, reset, loadSaved } = useAnalyze()
-const { currentId: currentAnalysisId, loadOne } = useAnalysisHistory()
+const { thinking, citations, result, analyzing, error, materialText, savedId, analyze, reset } = useAnalyze()
+const { currentId: currentAnalysisId } = useAnalysisHistory()
 const route = useRoute()
 const router = useRouter()
 
@@ -458,41 +458,13 @@ function startOver() {
   barFile.value = null
   severityFilter.value = null
   currentAnalysisId.value = null
-  if (route.query.id) router.replace({ path: '/analyze' })
 }
 
-// ─── Routing: загрузка сохранённого анализа по ?id= ───────────
-watch(
-  () => route.query.id,
-  async (id) => {
-    if (typeof id !== 'string' || !id) {
-      currentAnalysisId.value = null
-      return
-    }
-    if (savedId.value === id) {
-      currentAnalysisId.value = id
-      return
-    }
-    const data = await loadOne(id)
-    if (data) {
-      loadSaved({
-        id: data.id,
-        ad_text: data.ad_text,
-        result: data.result,
-        citations: data.citations,
-      })
-      currentAnalysisId.value = id
-      severityFilter.value = null
-    }
-  },
-  { immediate: true }
-)
-
-// При успешном новом анализе — синхронизируем URL и подсветку в сайдбаре.
+// После успешного анализа — переходим на страницу сохранённого результата.
 watch(savedId, (id) => {
-  if (id && route.query.id !== id) {
+  if (id) {
     currentAnalysisId.value = id
-    router.replace({ path: '/analyze', query: { id } })
+    router.replace(`/analyze/${id}`)
   }
 })
 

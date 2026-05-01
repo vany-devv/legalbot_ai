@@ -172,8 +172,11 @@ export function useAuth() {
         preferred_palette: res.PreferredPalette || 'navy',
       }
     } catch (e: any) {
+      // 401 = stale token. Just clear state — global auth middleware handles
+      // the redirect via navigateTo. Calling router.replace from here while
+      // a navigation is already in flight cancels both.
       if (e?.status === 401 || e?.statusCode === 401) {
-        await handleUnauthorized()
+        clearAuthState()
       }
     }
   }

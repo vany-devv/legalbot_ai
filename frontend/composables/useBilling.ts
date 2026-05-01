@@ -13,7 +13,7 @@ const loading = ref(false)
 export function useBilling() {
   const config = useRuntimeConfig()
   const api = config.public.apiBase
-  const { authHeaders, isLoggedIn, handleUnauthorized } = useAuth()
+  const { authHeaders, isLoggedIn } = useAuth()
 
   async function refresh() {
     if (!isLoggedIn.value) {
@@ -25,10 +25,10 @@ export function useBilling() {
       billing.value = await $fetch<BillingInfo>(`${api}/billing/me`, {
         headers: authHeaders(),
       })
-    } catch (e: any) {
-      if (e?.status === 401 || e?.statusCode === 401) {
-        await handleUnauthorized()
-      }
+    } catch {
+      // Don't navigate from here — global middleware handles redirect
+      // on the next route change, and an explicit router.replace() during
+      // login flow will overwrite the ?next= query param.
       billing.value = null
     } finally {
       loading.value = false

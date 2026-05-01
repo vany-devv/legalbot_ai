@@ -158,9 +158,10 @@ async function handleRegister() {
     error.value = 'Пароль должен быть не менее 6 символов'
     return
   }
+  const nextParam = route.query.next
   try {
     await register(email.value, password.value)
-    router.replace(useAuth().resolvePostAuthRedirect(route.query.next))
+    await router.replace(useAuth().resolvePostAuthRedirect(nextParam))
   } catch (e: any) {
     error.value = e?.data || e?.message || 'Ошибка регистрации'
   }

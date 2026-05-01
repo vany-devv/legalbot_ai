@@ -134,7 +134,7 @@
         <span class="sidebar-label" :class="sidebarOpen ? 'label-show' : 'label-hide'">База знаний</span>
       </NuxtLink>
 
-      <NuxtLink to="/analyze" class="sidebar-nav-item" active-class="sidebar-nav-active">
+      <NuxtLink to="/analyze" class="sidebar-nav-item" active-class="sidebar-nav-active" :class="route.path.startsWith('/analyze') ? 'sidebar-nav-active' : ''">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0">
           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
         </svg>
@@ -207,6 +207,7 @@ const { user, isLoggedIn, isAdmin, logout } = useAuth()
 const { sidebarOpen, sidebarReady, toggle } = useSidebar()
 const { theme, toggle: toggleTheme } = useTheme()
 const router = useRouter()
+const route = useRoute()
 
 onMounted(async () => {
   await Promise.all([loadConversations(), loadAnalyses()])
@@ -226,7 +227,7 @@ function handleOpen(id: string) {
 }
 
 function handleOpenAnalysis(id: string) {
-  router.push(`/analyze?id=${id}`)
+  router.push(`/analyze/${id}`)
 }
 
 async function confirmDeleteAnalysis(id: string) {

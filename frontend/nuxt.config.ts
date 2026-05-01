@@ -16,6 +16,15 @@ export default defineNuxtConfig({
   },
   devtools: { enabled: false },
   future: { compatibilityVersion: 4 },
+  // Compat 4 changes srcDir to './app' by default — pin to root so
+  // frontend/middleware/, frontend/plugins/, frontend/composables/ are scanned.
+  srcDir: '.',
+  dir: {
+    pages: 'pages',
+    layouts: 'layouts',
+    middleware: 'middleware',
+    plugins: 'plugins',
+  },
   app: {
     head: {
       title: 'LegalBot AI',

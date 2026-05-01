@@ -110,9 +110,12 @@ function onForgotPassword() {
 
 async function handleLogin() {
   error.value = ''
+  // Capture next BEFORE any await — route is reactive, so any background
+  // navigation during login() would otherwise wipe the query param.
+  const nextParam = route.query.next
   try {
     await login(email.value, password.value)
-    router.replace(useAuth().resolvePostAuthRedirect(route.query.next))
+    await router.replace(useAuth().resolvePostAuthRedirect(nextParam))
   } catch (e: any) {
     error.value = e?.data || e?.message || 'Ошибка входа'
   }
