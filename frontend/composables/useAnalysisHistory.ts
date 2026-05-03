@@ -29,7 +29,7 @@ const loading = ref(false)
 export function useAnalysisHistory() {
   const config = useRuntimeConfig()
   const api = config.public.apiBase
-  const { authHeaders, isLoggedIn } = useAuth()
+  const { isLoggedIn } = useAuth()
 
   async function loadList() {
     if (!isLoggedIn.value) {
@@ -39,7 +39,7 @@ export function useAnalysisHistory() {
     loading.value = true
     try {
       const res = await $fetch<AnalysisListItem[]>(`${api}/analyses`, {
-        headers: authHeaders(),
+        credentials: 'include',
       })
       items.value = res || []
     } catch (e) {
@@ -54,7 +54,7 @@ export function useAnalysisHistory() {
     if (!isLoggedIn.value) return null
     try {
       return await $fetch<AnalysisFull>(`${api}/analyses/${id}`, {
-        headers: authHeaders(),
+        credentials: 'include',
       })
     } catch (e) {
       console.warn('Failed to load analysis:', e)
@@ -67,7 +67,7 @@ export function useAnalysisHistory() {
     try {
       await $fetch(`${api}/analyses/${id}`, {
         method: 'DELETE',
-        headers: authHeaders(),
+        credentials: 'include',
       })
       items.value = items.value.filter(it => it.id !== id)
       if (currentId.value === id) currentId.value = null

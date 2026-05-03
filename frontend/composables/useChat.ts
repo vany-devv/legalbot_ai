@@ -40,7 +40,7 @@ const sending = ref(false)
 export function useChat() {
   const config = useRuntimeConfig()
   const api = config.public.apiBase
-  const { authHeaders, handleUnauthorized } = useAuth()
+  const { isLoggedIn, clearAuthState } = useAuth()
 
   function newChat() {
     currentConversationId.value = null
@@ -54,15 +54,12 @@ export function useChat() {
   }
 
   async function loadConversations() {
+    if (!isLoggedIn.value) return
     try {
-      const headers = authHeaders()
-      if (!headers.Authorization) return
-      const res = await $fetch<Array<{ id: string; title: string; updated_at: string }>>(`${api}/chat/conversations`, { headers })
+      const res = await $fetch<Array<{ id: string; title: string; updated_at: string }>>(`${api}/chat/conversations`, { credentials: 'include' })
       conversations.value = (res || []).map(c => ({ id: c.id, title: c.title, updatedAt: new Date(c.updated_at) }))
     } catch (e: any) {
-      if (e?.status === 401 || e?.statusCode === 401) {
-        await handleUnauthorized()
-      }
+      if (e?.status === 401 || e?.statusCode === 401) clearAuthState()
     }
   }
 
@@ -76,7 +73,7 @@ export function useChat() {
           Citations: Array<{ ChunkID: string; SourceID: string; Score: number; Quote: string; Meta: Record<string, any> }>
           CreatedAt: string
         }>
-      }>(`${api}/chat/conversations/${conversationId}`, { headers: authHeaders() })
+      }>(`${api}/chat/conversations/${conversationId}`, { credentials: 'include' })
       // Guard against race condition: user may have switched conversations
       if (currentConversationId.value !== conversationId) return
       messages.value = (res.Messages || []).map(m => ({
@@ -90,9 +87,7 @@ export function useChat() {
         createdAt: new Date(m.CreatedAt),
       }))
     } catch (e: any) {
-      if (e?.status === 401 || e?.statusCode === 401) {
-        await handleUnauthorized()
-      }
+      if (e?.status === 401 || e?.statusCode === 401) clearAuthState()
     }
   }
 
@@ -112,7 +107,8 @@ export function useChat() {
 
       const response = await fetch(`${api}/chat/ask/stream`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(body),
       })
 
@@ -123,7 +119,7 @@ export function useChat() {
         return
       }
       if (response.status === 401) {
-        await handleUnauthorized()
+        clearAuthState()
         throw new Error('Требуется авторизация')
       }
       if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`)

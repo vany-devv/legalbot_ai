@@ -2,7 +2,6 @@ package usecase
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -10,18 +9,11 @@ import (
 )
 
 type GetMeUseCase struct {
-	userRepo       domain.UserRepository
-	tokenGenerator domain.TokenGenerator
+	userRepo domain.UserRepository
 }
 
-func NewGetMeUseCase(
-	userRepo domain.UserRepository,
-	tokenGenerator domain.TokenGenerator,
-) *GetMeUseCase {
-	return &GetMeUseCase{
-		userRepo:       userRepo,
-		tokenGenerator: tokenGenerator,
-	}
+func NewGetMeUseCase(userRepo domain.UserRepository) *GetMeUseCase {
+	return &GetMeUseCase{userRepo: userRepo}
 }
 
 type GetMeResponse struct {
@@ -31,17 +23,9 @@ type GetMeResponse struct {
 	PreferredPalette string
 }
 
-func (uc *GetMeUseCase) Execute(ctx context.Context, token string) (*GetMeResponse, error) {
-	userIDStr, err := uc.tokenGenerator.Validate(token)
-	if err != nil {
-		return nil, errors.New("invalid token")
-	}
-
-	userID, err := uuid.Parse(userIDStr)
-	if err != nil {
-		return nil, errors.New("invalid user ID")
-	}
-
+// Execute грузит профиль юзера по ID. ID берётся из контекста запроса
+// (auth-middleware валидирует cookie + DB-сессию и кладёт user_id в ctx).
+func (uc *GetMeUseCase) Execute(ctx context.Context, userID uuid.UUID) (*GetMeResponse, error) {
 	user, err := uc.userRepo.FindByID(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("user not found: %w", err)

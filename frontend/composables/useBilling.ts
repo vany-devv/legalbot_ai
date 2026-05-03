@@ -13,7 +13,7 @@ const loading = ref(false)
 export function useBilling() {
   const config = useRuntimeConfig()
   const api = config.public.apiBase
-  const { authHeaders, isLoggedIn } = useAuth()
+  const { isLoggedIn } = useAuth()
 
   async function refresh() {
     if (!isLoggedIn.value) {
@@ -23,7 +23,7 @@ export function useBilling() {
     loading.value = true
     try {
       billing.value = await $fetch<BillingInfo>(`${api}/billing/me`, {
-        headers: authHeaders(),
+        credentials: 'include',
       })
     } catch {
       // Don't navigate from here — global middleware handles redirect

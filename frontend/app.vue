@@ -1,5 +1,7 @@
 <template>
-  <div class="app-shell">
+  <!-- Показываем shell только после auth.init() — иначе мелькает login,
+       пока async middleware ещё ждёт ответа от /auth/me. -->
+  <div v-if="initialized" class="app-shell">
     <ChatSidebar v-if="showSidebar" />
     <main class="main-area">
       <NuxtPage />
@@ -10,9 +12,11 @@
 
 <script setup lang="ts">
 const route = useRoute()
+const router = useRouter()
 const { init } = useTheme()
 const { init: initPalette } = usePalette()
 const { init: initSidebar } = useSidebar()
+const { user, initialized, buildLoginRedirect } = useAuth()
 
 useHead({
   titleTemplate: (title) => title ? `LegalBot AI | ${title}` : 'LegalBot AI',
@@ -26,6 +30,16 @@ onMounted(() => {
 
 const authRoutes = ['/auth/login', '/auth/register']
 const showSidebar = computed(() => !authRoutes.includes(route.path))
+
+// Любой переход user: <obj> → null (logout, протухший cookie из 401-хендлера)
+// принудительно отправляет на login через router. Решает overlay-баг,
+// когда middleware не срабатывает потому что navigation не было.
+watch(user, (next, prev) => {
+  if (!initialized.value) return
+  if (prev && !next && !route.path.startsWith('/auth/')) {
+    router.replace(buildLoginRedirect(route.fullPath))
+  }
+})
 </script>
 
 <style>

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"legalbot/services/internal/auth/cookie"
 	"legalbot/services/internal/auth/domain"
 	"legalbot/services/internal/pkg/logger"
 )
@@ -65,13 +66,15 @@ func (uc *LoginUseCase) Execute(ctx context.Context, req LoginRequest) (*LoginRe
 		return nil, fmt.Errorf("failed to generate token: %w", err)
 	}
 
-	// Создание сессии
+	// Создание сессии. Срок — cookie.SessionTTL, продлевается через
+	// sliding-refresh в auth-middleware на каждом активном запросе.
+	now := time.Now()
 	session := &domain.Session{
 		ID:        uuid.New(),
 		UserID:    user.ID,
 		Token:     token,
-		ExpiresAt: time.Now().Add(24 * time.Hour),
-		CreatedAt: time.Now(),
+		ExpiresAt: now.Add(cookie.SessionTTL),
+		CreatedAt: now,
 	}
 
 	if err := uc.sessionRepo.Create(ctx, session); err != nil {

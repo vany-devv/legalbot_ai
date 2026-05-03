@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"legalbot/services/internal/auth/domain"
@@ -41,6 +42,12 @@ func (r *PostgresSessionRepository) FindByToken(ctx context.Context, token strin
 		return nil, fmt.Errorf("session not found")
 	}
 	return session, err
+}
+
+func (r *PostgresSessionRepository) RefreshExpiry(ctx context.Context, sessionID uuid.UUID, newExpiresAt time.Time) error {
+	query := `UPDATE sessions SET expires_at = $1 WHERE id = $2`
+	_, err := r.db.ExecContext(ctx, query, newExpiresAt, sessionID)
+	return err
 }
 
 func (r *PostgresSessionRepository) Delete(ctx context.Context, id uuid.UUID) error {

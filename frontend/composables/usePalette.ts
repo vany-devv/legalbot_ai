@@ -27,7 +27,7 @@ const palette = ref<Palette>('navy')
 export function usePalette() {
   const config = useRuntimeConfig()
   const api = config.public.apiBase
-  const { authHeaders, user, isLoggedIn } = useAuth()
+  const { user, isLoggedIn } = useAuth()
 
   function init() {
     if (import.meta.server) return
@@ -51,7 +51,7 @@ export function usePalette() {
       try {
         await $fetch(`${api}/auth/me/preferences`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', ...authHeaders() },
+          credentials: 'include',
           body: { preferred_palette: next },
         })
       } catch (e) {

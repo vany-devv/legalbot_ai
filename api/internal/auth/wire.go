@@ -36,7 +36,7 @@ func Wire(
 	// Use cases
 	registerUC := usecase.NewRegisterUseCase(userRepo, passwordHasher, planRepo, subscriptionRepo)
 	loginUC := usecase.NewLoginUseCase(userRepo, sessionRepo, passwordHasher, tokenGenerator)
-	getMeUC := usecase.NewGetMeUseCase(userRepo, tokenGenerator)
+	getMeUC := usecase.NewGetMeUseCase(userRepo)
 	changePasswordUC := usecase.NewChangePasswordUseCase(userRepo, sessionRepo, passwordHasher)
 	logoutUC := usecase.NewLogoutUseCase(sessionRepo)
 	updatePrefsUC := usecase.NewUpdatePreferencesUseCase(userRepo)
