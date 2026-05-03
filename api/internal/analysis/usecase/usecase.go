@@ -24,6 +24,7 @@ const (
 type SaveRequest struct {
 	UserID    uuid.UUID
 	AdText    string
+	Filename  string // имя файла если материал был загружен файлом, иначе ""
 	Result    json.RawMessage
 	Citations json.RawMessage
 }
@@ -47,7 +48,7 @@ func (uc *SaveAnalysisUseCase) Execute(ctx context.Context, req SaveRequest) (*d
 	a := &domain.AdAnalysis{
 		ID:        uuid.New(),
 		UserID:    req.UserID,
-		Title:     deriveTitle(req.AdText),
+		Title:     deriveTitleFromFilenameOrText(req.Filename, req.AdText),
 		AdText:    req.AdText,
 		Result:    req.Result,
 		Citations: req.Citations,
@@ -57,6 +58,40 @@ func (uc *SaveAnalysisUseCase) Execute(ctx context.Context, req SaveRequest) (*d
 		return nil, err
 	}
 	return a, nil
+}
+
+// deriveTitleFromFilenameOrText: если материал был загружен файлом — title
+// формируется из имени файла (без расширения), иначе из первой фразы текста.
+func deriveTitleFromFilenameOrText(filename, adText string) string {
+	if t := titleFromFilename(filename); t != "" {
+		return t
+	}
+	return deriveTitle(adText)
+}
+
+// titleFromFilename: убирает путь, расширение и обрезает по maxTitleChars.
+// Пустую строку возвращает если filename невалиден.
+func titleFromFilename(filename string) string {
+	if filename == "" {
+		return ""
+	}
+	// Снимаем возможный путь (на всякий случай).
+	if i := strings.LastIndexAny(filename, `/\`); i >= 0 {
+		filename = filename[i+1:]
+	}
+	// Снимаем расширение.
+	if i := strings.LastIndex(filename, "."); i > 0 {
+		filename = filename[:i]
+	}
+	filename = strings.TrimSpace(filename)
+	if filename == "" {
+		return ""
+	}
+	if utf8.RuneCountInString(filename) <= maxTitleChars {
+		return filename
+	}
+	runes := []rune(filename)
+	return strings.TrimSpace(string(runes[:maxTitleChars])) + "…"
 }
 
 // deriveTitle: первая «осмысленная» фраза из материала — до точки или до 60 символов,

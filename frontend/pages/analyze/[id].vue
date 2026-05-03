@@ -82,17 +82,23 @@
 
               <!-- Material card -->
               <div class="bg-panel border border-rim rounded-xl overflow-hidden">
-                <div class="flex items-center justify-between px-4 py-3 border-b border-rim-faint">
-                  <span class="text-[12px] font-semibold uppercase tracking-wider text-ink-faint">
-                    Материал
-                  </span>
-                  <span class="text-[11px] text-ink-faint tabular-nums">
+                <div class="flex items-center justify-between px-4 py-3 border-b border-rim-faint gap-3">
+                  <div class="flex items-center gap-2 min-w-0">
+                    <span class="text-[12px] font-semibold uppercase tracking-wider text-ink-faint flex-shrink-0">
+                      Материал
+                    </span>
+                    <span v-if="materialTitle" class="text-[13px] text-ink truncate font-medium" :title="materialTitle">
+                      · {{ materialTitle }}
+                    </span>
+                  </div>
+                  <span class="text-[11px] text-ink-faint tabular-nums flex-shrink-0">
                     {{ analyzedText.length.toLocaleString('ru-RU') }} симв.
                   </span>
                 </div>
                 <div
                   class="material-content px-5 py-4 text-[14px] leading-[1.7] text-ink break-words"
                   v-html="annotatedHtml"
+                  @click="onMaterialClick"
                 />
               </div>
 
@@ -131,10 +137,18 @@
                 tag="div"
                 class="flex flex-col gap-3"
               >
-                <RiskCard
-                  v-for="(risk, i) in filteredRisks" :key="`${risk.law_reference}-${risk.fragment}-${i}`"
-                  :risk="risk"
-                />
+                <div
+                  v-for="(risk, i) in filteredRisks"
+                  :key="`${risk.law_reference}-${risk.fragment}-${i}`"
+                  :id="`risk-${result.risks?.indexOf(risk) ?? i}`"
+                  class="risk-card-wrap"
+                >
+                  <RiskCard
+                    :risk="risk"
+                    :idx="result.risks?.indexOf(risk) ?? i"
+                    @jump-to-fragment="onJumpToFragment"
+                  />
+                </div>
               </TransitionGroup>
 
               <!-- Empty filter result -->
@@ -249,7 +263,7 @@ useHead({ title: 'Анализ рекламы' })
 
 const route = useRoute()
 const router = useRouter()
-const { result, citations, savedId, materialText, loadSaved, reset } = useAnalyze()
+const { result, citations, savedId, materialText, materialTitle, loadSaved, reset } = useAnalyze()
 const { currentId: currentAnalysisId, loadOne } = useAnalysisHistory()
 
 const loading = ref(false)
@@ -266,6 +280,48 @@ function toggleSource(idx: number) {
   if (s.has(idx)) s.delete(idx)
   else s.add(idx)
   expandedSources.value = s
+}
+
+// Клик на карточке риска → скролл к подсвеченному фрагменту в тексте.
+function onJumpToFragment(idx: number) {
+  nextTick(() => {
+    const marks = document.querySelectorAll(`.material-content mark[data-risk-idx="${idx}"]`)
+    if (!marks.length) return
+    ;(marks[0] as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' })
+    marks.forEach(m => {
+      const el = m as HTMLElement
+      el.classList.remove('mark-flash')
+      void el.offsetWidth
+      el.classList.add('mark-flash')
+      setTimeout(() => el.classList.remove('mark-flash'), 1500)
+    })
+  })
+}
+
+// Клик по подсвеченному фрагменту в тексте → скролл к карточке риска
+// + короткая визуальная вспышка.
+function onMaterialClick(e: MouseEvent) {
+  const target = e.target as HTMLElement
+  if (!target?.classList?.contains('risk-mark')) return
+  const idxStr = target.getAttribute('data-risk-idx')
+  if (idxStr === null) return
+  const idx = Number(idxStr)
+  if (!Number.isInteger(idx)) return
+
+  const targetRisk = result.value?.risks?.[idx]
+  if (targetRisk && severityFilter.value && targetRisk.risk_level !== severityFilter.value) {
+    severityFilter.value = null
+  }
+
+  nextTick(() => {
+    const el = document.getElementById(`risk-${idx}`)
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    el.classList.remove('risk-card-flash')
+    void el.offsetWidth
+    el.classList.add('risk-card-flash')
+    setTimeout(() => el.classList.remove('risk-card-flash'), 1500)
+  })
 }
 
 function handleNewAnalysis() {
@@ -285,6 +341,7 @@ onMounted(async () => {
     if (data) {
       loadSaved({
         id: data.id,
+        title: data.title,
         ad_text: data.ad_text,
         result: data.result,
         citations: data.citations,
@@ -400,13 +457,30 @@ function escapeHtml(s: string) {
 function buildFragmentRegex(fragment: string): RegExp | null {
   const trimmed = fragment.trim()
   if (!trimmed) return null
-  const tokens = trimmed
-    .split(/\s+/)
-    .map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-    .filter(Boolean)
+  // LLM иногда:
+  //  1) нормализует словоформы ("работал" → "работает")
+  //  2) пропускает запятые/тире между словами фрагмента
+  //  3) оборачивает фрагмент в «...» / "..."
+  // Поэтому матчим по словам-префиксам (для русского хватает срезать 2 буквы),
+  // а между токенами разрешаем ЛЮБЫЕ не-буквенные символы.
+  const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const tokens = (trimmed.match(/[\p{L}\p{N}]+/gu) || []).filter(Boolean)
   if (!tokens.length) return null
   try {
-    return new RegExp(tokens.join('\\s+'), 'giu')
+    const parts = tokens.map(t => {
+      const escaped = escape(t)
+      const isWord = /^[\p{L}]+$/u.test(t)
+      // Не-буквенные токены — точно.
+      if (!isWord) return escaped
+      // 1-2 символа (предлоги, союзы) — точно.
+      if (t.length <= 2) return escaped
+      // 3-4 символа: префикс + до 3 букв окончания.
+      if (t.length <= 4) return `${escaped}\\p{L}{0,3}`
+      // 5+: срезаем 2 буквы окончания, разрешаем 0-4 хвоста.
+      const stem = escape(t.slice(0, -2))
+      return `${stem}\\p{L}{0,4}`
+    })
+    return new RegExp(parts.join('[^\\p{L}\\p{N}]+'), 'giu')
   } catch {
     return null
   }
@@ -543,8 +617,29 @@ function splitBySentences(text: string, target = 280): string[] {
   text-decoration-style: solid;
   text-decoration-thickness: 2px;
   text-underline-offset: 4px;
-  cursor: help;
+  cursor: pointer;
   transition: background-color 120ms ease, filter 120ms ease;
+}
+
+/* ─── Risk card target highlight (когда юзер кликнул на mark) ─── */
+.risk-card-wrap { border-radius: 12px; transition: box-shadow 200ms ease; }
+.risk-card-flash {
+  animation: risk-flash 1.5s ease-out;
+}
+@keyframes risk-flash {
+  0%   { box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent) 60%, transparent); }
+  30%  { box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent) 35%, transparent); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+/* ─── Mark target highlight (когда юзер кликнул на карточку риска) ─── */
+:deep(.risk-mark.mark-flash) {
+  animation: mark-flash 1.5s ease-out;
+}
+@keyframes mark-flash {
+  0%   { background-color: color-mix(in oklab, var(--accent) 50%, transparent); }
+  30%  { background-color: color-mix(in oklab, var(--accent) 35%, transparent); }
+  100% { background-color: var(--mark-original-bg, transparent); }
 }
 :deep(.risk-mark.risk-high)   { background: color-mix(in oklab, var(--danger) 12%, transparent); text-decoration-color: var(--danger); }
 :deep(.risk-mark.risk-medium) { background: color-mix(in oklab, var(--warning) 14%, transparent); text-decoration-color: var(--warning); }

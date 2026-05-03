@@ -210,6 +210,7 @@ func (h *AnalyzeHandler) handleAnalyzeStream(w http.ResponseWriter, r *http.Requ
 				saved, err := h.saveAnalys.Execute(ctx, analysisuc.SaveRequest{
 					UserID:    parsedUserID,
 					AdText:    capturedAdText,
+					Filename:  filename,
 					Result:    capturedResult,
 					Citations: capturedCitations,
 				})
