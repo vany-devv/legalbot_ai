@@ -1,5 +1,10 @@
 <template>
-  <div class="risk-card relative rounded-lg border border-rim bg-panel overflow-hidden">
+  <div
+    class="risk-card relative rounded-lg border border-rim bg-panel overflow-hidden"
+    :class="{ 'risk-card-clickable': hasFragment }"
+    :title="hasFragment ? 'Перейти к фрагменту в тексте' : ''"
+    @click="onCardClick"
+  >
     <!-- Left color bar -->
     <div
       class="absolute top-2 bottom-2 w-[3px] rounded-full"
@@ -63,7 +68,16 @@
 <script setup lang="ts">
 import type { AdRisk } from '~/composables/useAnalyze'
 
-const props = defineProps<{ risk: AdRisk }>()
+const props = defineProps<{ risk: AdRisk; idx?: number }>()
+const emit = defineEmits<{ 'jump-to-fragment': [idx: number] }>()
+
+function onCardClick(e: MouseEvent) {
+  // Игнорим клики по интерактивным элементам внутри карточки (кнопка действий и т.п.).
+  const target = e.target as HTMLElement
+  if (target.closest('button, a')) return
+  if (!hasFragment.value || props.idx === undefined) return
+  emit('jump-to-fragment', props.idx)
+}
 
 const hasFragment = computed(() => {
   const f = props.risk.fragment?.trim()
@@ -101,10 +115,17 @@ const badgeClass = computed(() => {
 <style scoped>
 .risk-card {
   transition: transform 150ms var(--ease-out, cubic-bezier(0.2, 0.7, 0.2, 1)),
-              box-shadow 150ms var(--ease-out, cubic-bezier(0.2, 0.7, 0.2, 1));
+              box-shadow 150ms var(--ease-out, cubic-bezier(0.2, 0.7, 0.2, 1)),
+              border-color 150ms ease;
 }
 .risk-card:hover {
   box-shadow: var(--shadow-sm);
+}
+.risk-card-clickable {
+  cursor: pointer;
+}
+.risk-card-clickable:hover {
+  border-color: color-mix(in oklab, var(--accent) 40%, var(--border));
 }
 
 /* ─── Saturated severity badges ─── */

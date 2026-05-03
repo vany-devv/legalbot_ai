@@ -116,7 +116,7 @@
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
                 </svg>
-                <span>PDF, DOCX или TXT</span>
+                <span>PDF, DOCX или TXT — до 10 МБ</span>
               </template>
             </div>
 
@@ -151,17 +151,23 @@
 
               <!-- Material card -->
               <div class="bg-panel border border-rim rounded-xl overflow-hidden">
-                <div class="flex items-center justify-between px-4 py-3 border-b border-rim-faint">
-                  <span class="text-[12px] font-semibold uppercase tracking-wider text-ink-faint">
-                    Материал
-                  </span>
-                  <span class="text-[11px] text-ink-faint tabular-nums">
+                <div class="flex items-center justify-between px-4 py-3 border-b border-rim-faint gap-3">
+                  <div class="flex items-center gap-2 min-w-0">
+                    <span class="text-[12px] font-semibold uppercase tracking-wider text-ink-faint flex-shrink-0">
+                      Материал
+                    </span>
+                    <span v-if="materialTitle" class="text-[13px] text-ink truncate font-medium" :title="materialTitle">
+                      · {{ materialTitle }}
+                    </span>
+                  </div>
+                  <span class="text-[11px] text-ink-faint tabular-nums flex-shrink-0">
                     {{ analyzedText.length.toLocaleString('ru-RU') }} симв.
                   </span>
                 </div>
                 <div
                   class="material-content px-5 py-4 text-[14px] leading-[1.7] text-ink break-words"
                   v-html="annotatedHtml"
+                  @click="onMaterialClick"
                 />
               </div>
 
@@ -200,10 +206,18 @@
                 tag="div"
                 class="flex flex-col gap-3"
               >
-                <RiskCard
-                  v-for="(risk, i) in filteredRisks" :key="`${risk.law_reference}-${risk.fragment}-${i}`"
-                  :risk="risk"
-                />
+                <div
+                  v-for="(risk, i) in filteredRisks"
+                  :key="`${risk.law_reference}-${risk.fragment}-${i}`"
+                  :id="`risk-${result.risks?.indexOf(risk) ?? i}`"
+                  class="risk-card-wrap"
+                >
+                  <RiskCard
+                    :risk="risk"
+                    :idx="result.risks?.indexOf(risk) ?? i"
+                    @jump-to-fragment="onJumpToFragment"
+                  />
+                </div>
               </TransitionGroup>
 
               <!-- Empty filter result -->
@@ -377,7 +391,7 @@
 <script setup lang="ts">
 useHead({ title: 'Анализ рекламы' })
 
-const { thinking, citations, result, analyzing, error, materialText, savedId, analyze, reset } = useAnalyze()
+const { thinking, citations, result, analyzing, error, materialText, materialTitle, savedId, analyze, reset } = useAnalyze()
 const { currentId: currentAnalysisId } = useAnalysisHistory()
 const route = useRoute()
 const router = useRouter()
@@ -402,6 +416,52 @@ function toggleSource(idx: number) {
   expandedSources.value = s
 }
 
+// Клик на карточке риска → скролл к подсвеченному фрагменту в тексте +
+// мигание самого mark, чтобы юзер сразу увидел где это в материале.
+function onJumpToFragment(idx: number) {
+  // Если фильтр стоит, mark с этим idx всё равно в DOM (фильтр режет только
+  // карточки, не подсветку), так что фильтр не трогаем.
+  nextTick(() => {
+    const marks = document.querySelectorAll(`.material-content mark[data-risk-idx="${idx}"]`)
+    if (!marks.length) return
+    ;(marks[0] as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' })
+    marks.forEach(m => {
+      const el = m as HTMLElement
+      el.classList.remove('mark-flash')
+      void el.offsetWidth
+      el.classList.add('mark-flash')
+      setTimeout(() => el.classList.remove('mark-flash'), 1500)
+    })
+  })
+}
+
+// Клик по подсвеченному фрагменту в тексте → скролл к карточке риска +
+// короткая визуальная вспышка чтобы юзер сразу её заметил.
+function onMaterialClick(e: MouseEvent) {
+  const target = e.target as HTMLElement
+  if (!target?.classList?.contains('risk-mark')) return
+  const idxStr = target.getAttribute('data-risk-idx')
+  if (idxStr === null) return
+  const idx = Number(idxStr)
+  if (!Number.isInteger(idx)) return
+
+  // Если активен severity-фильтр и нужная карточка скрыта — сбрасываем фильтр.
+  const targetRisk = result.value?.risks?.[idx]
+  if (targetRisk && severityFilter.value && targetRisk.risk_level !== severityFilter.value) {
+    severityFilter.value = null
+  }
+
+  nextTick(() => {
+    const el = document.getElementById(`risk-${idx}`)
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    el.classList.remove('risk-card-flash')
+    void el.offsetWidth  // force reflow чтобы анимация запустилась повторно
+    el.classList.add('risk-card-flash')
+    setTimeout(() => el.classList.remove('risk-card-flash'), 1500)
+  })
+}
+
 const canSubmit = computed(() => !analyzing.value && (inputText.value.trim() || uploadFile.value))
 const hasStarted = computed(() => analyzing.value || !!result.value || !!error.value)
 
@@ -412,14 +472,28 @@ const barTextareaRef = ref<HTMLTextAreaElement | null>(null)
 
 const canBarSubmit = computed(() => !analyzing.value && (barText.value.trim() || barFile.value))
 
+const MAX_FILE_BYTES = 10 * 1024 * 1024  // 10 МБ — должно совпадать с rag/MAX_UPLOAD_BYTES
+const MAX_FILE_MB = MAX_FILE_BYTES / (1024 * 1024)
+
+function validateFileSize(f: File): boolean {
+  if (f.size > MAX_FILE_BYTES) {
+    useToast().show(`Файл слишком большой. Максимум ${MAX_FILE_MB} МБ.`, 'error', 5000)
+    return false
+  }
+  return true
+}
+
 function onFileChange(e: Event) {
   const target = e.target as HTMLInputElement
-  if (target.files?.[0]) uploadFile.value = target.files[0]
+  const f = target.files?.[0]
+  if (f && validateFileSize(f)) uploadFile.value = f
+  if (target) target.value = ''
 }
 
 function onDrop(e: DragEvent) {
   dragging.value = false
-  if (e.dataTransfer?.files?.[0]) uploadFile.value = e.dataTransfer.files[0]
+  const f = e.dataTransfer?.files?.[0]
+  if (f && validateFileSize(f)) uploadFile.value = f
 }
 
 async function runAnalysis() {
@@ -431,7 +505,9 @@ async function runAnalysis() {
 
 function onBarFileChange(e: Event) {
   const target = e.target as HTMLInputElement
-  if (target.files?.[0]) barFile.value = target.files[0]
+  const f = target.files?.[0]
+  if (f && validateFileSize(f)) barFile.value = f
+  if (target) target.value = ''
 }
 
 async function runBarAnalysis() {
@@ -581,13 +657,37 @@ function escapeHtml(s: string) {
 function buildFragmentRegex(fragment: string): RegExp | null {
   const trimmed = fragment.trim()
   if (!trimmed) return null
-  const tokens = trimmed
-    .split(/\s+/)
-    .map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-    .filter(Boolean)
+  // LLM иногда:
+  //  1) нормализует словоформы ("работал" → "работает")
+  //  2) пропускает запятые/тире между словами фрагмента
+  //  3) оборачивает фрагмент в «...» / "..."
+  // Поэтому матчим по словам-префиксам (для русского хватает срезать 2 буквы),
+  // а между токенами разрешаем ЛЮБЫЕ не-буквенные символы (пробелы, запятые,
+  // тире, точки и т.п.) — это покрывает пунктуацию в исходном тексте.
+  const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  // Из исходного фрагмента берём только буквенно-цифровые токены, всю пунктуацию
+  // (включая обрамляющие кавычки и внутренние запятые) выкидываем.
+  const tokens = (trimmed.match(/[\p{L}\p{N}]+/gu) || []).filter(Boolean)
   if (!tokens.length) return null
   try {
-    return new RegExp(tokens.join('\\s+'), 'giu')
+    const parts = tokens.map(t => {
+      const escaped = escape(t)
+      const isWord = /^[\p{L}]+$/u.test(t)
+      // Не-буквенные токены (числа, символы) — точное совпадение.
+      if (!isWord) return escaped
+      // 1-2 символа (предлоги, союзы) — точное совпадение, иначе ложные срабатывания
+      // на похожих коротких словах ("и" → "из", "ил" и т.п.).
+      if (t.length <= 2) return escaped
+      // 3-4 символа: матчим как префикс + до 3 букв окончания (вид → видом, виду).
+      if (t.length <= 4) return `${escaped}\\p{L}{0,3}`
+      // 5+: срезаем 2 буквы окончания и разрешаем 0-4 буквы хвоста
+      // (надёжный → надёжным, имущества → имуществом).
+      const stem = escape(t.slice(0, -2))
+      return `${stem}\\p{L}{0,4}`
+    })
+    // Между токенами — любая последовательность НЕ букв/цифр (пробелы, запятые,
+    // тире, кавычки и т.п.). Минимум один символ-разделитель.
+    return new RegExp(parts.join('[^\\p{L}\\p{N}]+'), 'giu')
   } catch {
     return null
   }
@@ -778,8 +878,29 @@ function splitBySentences(text: string, target = 280): string[] {
   text-decoration-style: solid;
   text-decoration-thickness: 2px;
   text-underline-offset: 4px;
-  cursor: help;
+  cursor: pointer;
   transition: background-color 120ms ease, filter 120ms ease;
+}
+
+/* ─── Risk card target highlight (когда юзер кликнул на mark) ─── */
+.risk-card-wrap { border-radius: 12px; transition: box-shadow 200ms ease; }
+.risk-card-flash {
+  animation: risk-flash 1.5s ease-out;
+}
+@keyframes risk-flash {
+  0%   { box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent) 60%, transparent); }
+  30%  { box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent) 35%, transparent); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+/* ─── Mark target highlight (когда юзер кликнул на карточку риска) ─── */
+:deep(.risk-mark.mark-flash) {
+  animation: mark-flash 1.5s ease-out;
+}
+@keyframes mark-flash {
+  0%   { background-color: color-mix(in oklab, var(--accent) 50%, transparent); }
+  30%  { background-color: color-mix(in oklab, var(--accent) 35%, transparent); }
+  100% { background-color: var(--mark-original-bg, transparent); }
 }
 :deep(.risk-mark.risk-high) {
   background: color-mix(in oklab, var(--danger) 12%, transparent);

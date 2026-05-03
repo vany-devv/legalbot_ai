@@ -67,10 +67,15 @@ export function useAuth() {
   async function login(email: string, password: string) {
     loading.value = true
     try {
+      // Тримим начало/конец — мобильная клавиатура / автокоррекция / копипаст
+      // часто добавляют trailing пробел и юзер не видит. Внутренние пробелы
+      // не трогаем — это законный символ для пароля-фразы.
+      const cleanEmail = email.trim()
+      const cleanPassword = password.trim()
       // Сервер ставит HttpOnly cookie 'lb-session' через Set-Cookie.
       await $fetch(`${api}/auth/login`, {
         method: 'POST',
-        body: { Email: email, Password: password },
+        body: { Email: cleanEmail, Password: cleanPassword },
         credentials: 'include',
       })
       initialized.value = true
@@ -89,11 +94,14 @@ export function useAuth() {
   async function register(email: string, password: string) {
     loading.value = true
     try {
+      // См. комментарий в login() — trim начала/конца, чтобы хеши совпадали при логине.
+      const cleanEmail = email.trim()
+      const cleanPassword = password.trim()
       await $fetch(`${api}/auth/register`, {
         method: 'POST',
-        body: { Email: email, Password: password },
+        body: { Email: cleanEmail, Password: cleanPassword },
       })
-      await login(email, password)
+      await login(cleanEmail, cleanPassword)
     } finally {
       loading.value = false
     }
@@ -136,9 +144,14 @@ export function useAuth() {
   }
 
   async function changePassword(currentPassword: string, newPassword: string) {
+    // Симметрично с login/register — trim начала/конца, иначе
+    // current_password не совпадёт с хешем после прошлого trim-логина.
     await $fetch(`${api}/auth/password`, {
       method: 'PUT',
-      body: { current_password: currentPassword, new_password: newPassword },
+      body: {
+        current_password: currentPassword.trim(),
+        new_password: newPassword.trim(),
+      },
       credentials: 'include',
     })
     // Сервер инвалидирует все сессии и чистит cookie — разлогиниваемся.

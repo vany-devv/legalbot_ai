@@ -24,12 +24,35 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/analyze", tags=["analyze"])
 
 MAX_AD_TEXT_LEN = 15_000
-CLASSIFY_SNIPPET_LEN = 1_000
+# Stage 1 видит начало + конец: рекламные маркеры (слово "РЕКЛАМА",
+# номера лицензий, контакты, домен/призыв к действию) обычно в конце
+# материала. Если брать только начало — нативная реклама с образовательной
+# подачей классифицируется как informational и все нарушения теряются.
+CLASSIFY_HEAD_LEN = 1_500
+CLASSIFY_TAIL_LEN = 800
+
+# Лимит размера загружаемого файла. Возвращается 413 при превышении.
+# Должен соответствовать UI-подписи в frontend/pages/analyze/index.vue.
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 МБ
+
+
+def _build_classify_snippet(ad_text: str) -> str:
+    """Готовит сниппет для Stage 1: первые N символов + последние M.
+
+    В рекламных материалах ключевые сигналы (слово "РЕКЛАМА", лицензия,
+    контакты, домен) часто находятся в конце. Просто `text[:N]` теряет их
+    для длинных нативных реклам.
+    """
+    if len(ad_text) <= CLASSIFY_HEAD_LEN + CLASSIFY_TAIL_LEN:
+        return ad_text
+    head = ad_text[:CLASSIFY_HEAD_LEN]
+    tail = ad_text[-CLASSIFY_TAIL_LEN:]
+    return f"{head}\n\n[...середина пропущена...]\n\n{tail}"
 
 
 async def _classify_ad(llm: LLMProvider, ad_text: str) -> dict:
     """Phase 1: detect ad category, target articles, checklist, and search queries."""
-    snippet = ad_text[:CLASSIFY_SNIPPET_LEN]
+    snippet = _build_classify_snippet(ad_text)
     user_msg = AD_CLASSIFY_USER_TEMPLATE.format(ad_snippet=snippet)
     try:
         raw = await llm.complete(system=AD_CLASSIFY_SYSTEM_PROMPT, user=user_msg)
@@ -54,9 +77,25 @@ async def _classify_ad(llm: LLMProvider, ad_text: str) -> dict:
 
         result["target_articles"] = valid_articles
 
+        # Нормализуем None на безопасные дефолты — иначе .join() / .get() с дефолтом
+        # будут получать None и ломаться (LLM может вернуть ключ со значением null).
+        if not isinstance(result.get("applicable_laws"), list):
+            result["applicable_laws"] = ["ФЗ-38"]
+        if not isinstance(result.get("checklist"), list):
+            result["checklist"] = []
+        if not isinstance(result.get("search_queries"), list):
+            result["search_queries"] = []
+        if not isinstance(result.get("object_identifiers"), list):
+            result["object_identifiers"] = []
+        if not isinstance(result.get("material_kind"), str):
+            result["material_kind"] = "informational"
+        if not isinstance(result.get("found_attributes"), dict):
+            result["found_attributes"] = {}
+
         if result.get("search_queries") or result.get("checklist"):
             logger.info(
-                "[CLASSIFY] category=%r  articles=%s  checklist_items=%d",
+                "[CLASSIFY] material_kind=%r category=%r articles=%s checklist_items=%d",
+                result.get("material_kind"),
                 result.get("category"),
                 valid_articles,
                 len(result.get("checklist", [])),
@@ -66,12 +105,19 @@ async def _classify_ad(llm: LLMProvider, ad_text: str) -> dict:
     except Exception as exc:
         logger.warning("Ad classification failed: %s", exc)
 
+    # Fallback: безопасный набор, проверяющий только формулировки по ст. 5 ФЗ-38.
+    # Не выдумываем категорию или specific-объект — пусть Stage 2 работает только
+    # с универсальными правилами.
     return {
-        "category": "общая реклама",
-        "applicable_laws": ["38-ФЗ"],
-        "target_articles": [{"law": "38", "article": "5"}, {"law": "38", "article": "28"}],
+        "material_kind": "informational",
+        "category": None,
+        "object_identifiers": [],
+        "applicable_laws": ["ФЗ-38"],
+        "target_articles": [{"law": "38", "article": "5"}],
         "checklist": [
-            "[ч. 3 ст. 5 ФЗ-38] Отсутствуют недостоверные или преувеличенные утверждения",
+            "[ч. 3 ст. 5 ФЗ-38] Отсутствуют гарантии результата (доходности, излечения, эффективности)",
+            "[ч. 3 ст. 5 ФЗ-38] Отсутствуют абсолютные характеристики без подтверждения (лучший, №1)",
+            "[ч. 3 ст. 5 ФЗ-38] Сравнения с конкурентами имеют подтверждение",
             "[ч. 7 ст. 5 ФЗ-38] Раскрыты все существенные условия",
         ],
         "search_queries": [
@@ -176,6 +222,12 @@ async def _resolve_ad_text(
 ) -> str:
     if file is not None:
         content = await file.read()
+        if len(content) > MAX_UPLOAD_BYTES:
+            mb = MAX_UPLOAD_BYTES // (1024 * 1024)
+            raise HTTPException(
+                status_code=413,
+                detail=f"Файл слишком большой. Максимум {mb} МБ.",
+            )
         filename = file.filename or "upload.txt"
         if filename.lower().endswith(".pdf"):
             extracted = _extract_pdf_paragraphs(content)
@@ -232,40 +284,125 @@ def _build_structured_context(
     return mandatory_ctx, supplementary_ctx
 
 
+async def _fetch_missing_for_risks(
+    repo: VectorRepository,
+    risks: list[dict],
+    already: list[SearchResult],
+) -> list[SearchResult]:
+    """Догружает из БД статьи, на которые ссылаются риски, но которых нет в already.
+
+    Stage 2 может зафлагать норму, которую Stage 1 не запросил (или retrieval не
+    подтянул). Без догрузки фильтр в _build_all_citations найдёт 0 источников
+    при непустом списке рисков. Этот хелпер закрывает разрыв.
+    """
+    if not risks:
+        return []
+    have_keys: set[tuple[str, str]] = {
+        _chunk_law_article_key(r.meta) for r in already
+    }
+    needed: set[tuple[str, str]] = set()
+    for risk in risks:
+        if not isinstance(risk, dict):
+            continue
+        parsed = _parse_law_reference(risk.get("law_reference", ""))
+        if parsed and parsed not in have_keys:
+            needed.add(parsed)
+    if not needed:
+        return []
+    target_articles = [{"law": law, "article": article} for (law, article) in needed]
+    extra = await repo.fetch_by_articles(target_articles)
+    logger.info(
+        "[ANALYZE] refetched %d articles for risks: %s",
+        len({(r.meta.get("law"), r.meta.get("article")) for r in extra}),
+        sorted(needed),
+    )
+    return extra
+
+
+def _parse_law_reference(ref: str) -> tuple[str, str] | None:
+    """Парсит ссылку из risk.law_reference в (номер_закона, номер_статьи).
+
+    Принимает форматы: "ч. 3 ст. 5 ФЗ-38", "п. 2 ст. 51 ФЗ-156",
+    "ст. 28.1 ФЗ-38", "ст. 5 38-ФЗ" и т.п. Возвращает None если не парсится.
+    """
+    if not ref:
+        return None
+    # Ищем номер статьи и номер закона.
+    article_m = re.search(r"ст\.?\s*(\d+(?:[.\-]\d+)?)", ref, re.IGNORECASE)
+    law_m = re.search(r"ФЗ[-\s]*(\d+)|(\d+)[-\s]*ФЗ", ref, re.IGNORECASE)
+    if not article_m or not law_m:
+        return None
+    article = re.sub(r"[^\d]", "", article_m.group(1))
+    law = law_m.group(1) or law_m.group(2)
+    if not (law and article):
+        return None
+    return (law, article)
+
+
+def _chunk_law_article_key(meta: dict) -> tuple[str, str]:
+    """Нормализует meta {law, article} в (law_num, article_num) для сравнения с ссылками рисков.
+
+    meta.law имеет вид "ФЗ 38 ФЗ 13 03 2006" → берём первое число с разумным
+    диапазоном (1-999). meta.article вида "29." или "275-" → только цифры.
+    """
+    law_str = str(meta.get("law", ""))
+    article_str = str(meta.get("article", ""))
+    # Первое число из meta.law, отбрасывая годы и даты (>1000).
+    law_num = ""
+    for m in re.finditer(r"\d+", law_str):
+        n = m.group(0)
+        if 1 <= int(n) <= 999:
+            law_num = n
+            break
+    article_num = re.sub(r"[^\d]", "", article_str)
+    return (law_num, article_num)
+
+
 def _build_all_citations(
     mandatory: list[SearchResult],
     supplementary: list[SearchResult],
+    risks: list[dict] | None = None,
 ) -> list[CitationResponse]:
-    """Build deduplicated citation list: mandatory first, one entry per (law, article)."""
+    """Build citation list filtered by risks' law_references.
+
+    Возвращает только статьи, на которые реально ссылаются риски, чтобы не
+    показывать юзеру 15+ нерелевантных норм. Если ни одна ссылка из рисков
+    не парсится — возвращаем все mandatory как fallback.
+    """
+    referenced: set[tuple[str, str]] = set()
+    for risk in risks or []:
+        parsed = _parse_law_reference(risk.get("law_reference", "") if isinstance(risk, dict) else "")
+        if parsed:
+            referenced.add(parsed)
+
     seen: set[tuple[str, str]] = set()
     result: list[CitationResponse] = []
 
+    def _add(r: SearchResult) -> None:
+        key = (r.meta.get("law", r.document_id), r.meta.get("article", ""))
+        if key in seen:
+            return
+        seen.add(key)
+        result.append(CitationResponse(
+            chunk_id=r.chunk_id,
+            document_id=r.document_id,
+            content=r.content,
+            retrieval_score=r.score,
+            meta=r.meta,
+        ))
+
+    if referenced:
+        # Фильтр-режим: оставляем только цитируемые рисками статьи.
+        for r in list(mandatory) + list(supplementary):
+            if _chunk_law_article_key(r.meta) in referenced:
+                _add(r)
+        if result:
+            return result
+        # Если фильтрация ничего не дала (риски ссылаются на нормы вне выгруженных
+        # чанков) — fallback на mandatory чтобы юзер хоть что-то видел.
+
     for r in mandatory:
-        key = (r.meta.get("law", r.document_id), r.meta.get("article", ""))
-        if key in seen:
-            continue
-        seen.add(key)
-        result.append(CitationResponse(
-            chunk_id=r.chunk_id,
-            document_id=r.document_id,
-            content=r.content,
-            retrieval_score=r.score,
-            meta=r.meta,
-        ))
-
-    for r in supplementary:
-        key = (r.meta.get("law", r.document_id), r.meta.get("article", ""))
-        if key in seen:
-            continue
-        seen.add(key)
-        result.append(CitationResponse(
-            chunk_id=r.chunk_id,
-            document_id=r.document_id,
-            content=r.content,
-            retrieval_score=r.score,
-            meta=r.meta,
-        ))
-
+        _add(r)
     return result
 
 
@@ -292,8 +429,11 @@ async def analyze(
 
     checklist_str = _format_checklist(classification.get("checklist", []))
     user_msg = AD_ANALYSIS_USER_TEMPLATE.format(
-        category=classification.get("category", "не определена"),
-        applicable_laws=", ".join(classification.get("applicable_laws", ["38-ФЗ"])),
+        material_kind=classification.get("material_kind", "не определён"),
+        category=classification.get("category") or "не применимо",
+        object_identifiers=_format_object_identifiers(classification.get("object_identifiers", [])),
+        found_attributes=_format_found_attributes(classification.get("found_attributes", {})),
+        applicable_laws=", ".join(classification.get("applicable_laws", ["ФЗ-38"])),
         checklist=checklist_str,
         ad_text=ad_text,
         mandatory_context=mandatory_ctx,
@@ -301,7 +441,9 @@ async def analyze(
     )
 
     logger.info(
-        "[ANALYZE] mandatory_articles=%d  supplementary_articles=%d",
+        "[ANALYZE] material_kind=%s category=%s mandatory_articles=%d supplementary_articles=%d",
+        classification.get("material_kind"),
+        classification.get("category"),
         len({(r.meta.get("law"), r.meta.get("article")) for r in mandatory}),
         len({(r.meta.get("law"), r.meta.get("article")) for r in supplementary}),
     )
@@ -320,11 +462,15 @@ async def analyze(
         },
     )
 
+    # Догружаем статьи, упомянутые в рисках, но отсутствующие в mandatory+supplementary.
+    extra_chunks = await _fetch_missing_for_risks(repo, risks, mandatory + supplementary)
+    full_mandatory = list(mandatory) + extra_chunks
+
     return AnalyzeResponse(
         risks=risks,
         summary=parsed.get("summary", raw),
         overall_risk_level=parsed.get("overall_risk_level", "unknown"),
-        citations=_build_all_citations(mandatory, supplementary),
+        citations=_build_all_citations(full_mandatory, supplementary, risks),
     )
 
 
@@ -352,8 +498,8 @@ async def analyze_stream(
         yield _event({"type": "thinking", "text": "Определяю категорию и применимые нормы..."})
 
         classification = await _classify_ad(llm, ad_text)
-        category = classification.get("category", "не определена")
-        yield _event({"type": "thinking", "text": f"Категория: {category}. Загружаю нормативные акты..."})
+        thinking_label = _humanize_classification(classification)
+        yield _event({"type": "thinking", "text": f"{thinking_label}. Загружаю нормативные акты..."})
 
         mandatory, supplementary = await _fetch_both(repo, retriever, classification, top_k)
         total = len(set((r.meta.get("law", ""), r.meta.get("article", "")) for r in mandatory + supplementary))
@@ -361,15 +507,20 @@ async def analyze_stream(
 
         mandatory_ctx, supplementary_ctx = _build_structured_context(mandatory, supplementary)
         logger.info(
-            "[ANALYZE] mandatory_articles=%d  supplementary_articles=%d",
+            "[ANALYZE] material_kind=%s category=%s mandatory_articles=%d supplementary_articles=%d",
+            classification.get("material_kind"),
+            classification.get("category"),
             len({(r.meta.get("law"), r.meta.get("article")) for r in mandatory}),
             len({(r.meta.get("law"), r.meta.get("article")) for r in supplementary}),
         )
 
         checklist_str = _format_checklist(classification.get("checklist", []))
         user_msg = AD_ANALYSIS_USER_TEMPLATE.format(
-            category=category,
-            applicable_laws=", ".join(classification.get("applicable_laws", ["38-ФЗ"])),
+            material_kind=classification.get("material_kind", "не определён"),
+            category=classification.get("category") or "не применимо",
+            object_identifiers=_format_object_identifiers(classification.get("object_identifiers", [])),
+            found_attributes=_format_found_attributes(classification.get("found_attributes", {})),
+            applicable_laws=", ".join(classification.get("applicable_laws", ["ФЗ-38"])),
             checklist=checklist_str,
             ad_text=ad_text,
             mandatory_context=mandatory_ctx,
@@ -386,13 +537,18 @@ async def analyze_stream(
             extra={
                 "overall": parsed.get("overall_risk_level"),
                 "risks_count": len(risks),
-                "category": category,
+                "category": classification.get("category"),
+                "material_kind": classification.get("material_kind"),
             },
         )
 
         yield _event({"type": "result", "data": parsed})
 
-        citations_data = [c.model_dump() for c in _build_all_citations(mandatory, supplementary)]
+        # Догружаем статьи, упомянутые в рисках, но отсутствующие в выгруженных чанках.
+        extra_chunks = await _fetch_missing_for_risks(repo, risks, mandatory + supplementary)
+        full_mandatory = list(mandatory) + extra_chunks
+
+        citations_data = [c.model_dump() for c in _build_all_citations(full_mandatory, supplementary, risks)]
         yield _event({"type": "citations", "data": citations_data})
         yield "data: [DONE]\n\n"
 
@@ -422,6 +578,91 @@ def _format_checklist(items: list[str]) -> str:
     if items:
         return "\n".join(f"- {item}" for item in items)
     return "- Общие требования ФЗ-38"
+
+
+def _format_object_identifiers(items: list) -> str:
+    """Format identifiers list for Stage 2 prompt — comma-joined or 'не указаны'."""
+    if not items or not isinstance(items, list):
+        return "не указаны (информационный/обзорный материал)"
+    cleaned = [str(x).strip() for x in items if str(x).strip()]
+    if not cleaned:
+        return "не указаны (информационный/обзорный материал)"
+    return ", ".join(cleaned)
+
+
+# Человекочитаемые лейблы для атрибутов в Stage 2 user-template.
+_ATTR_LABELS = {
+    "license_number": "Номер лицензии",
+    "company_name": "Наименование компании / УК",
+    "company_address": "Юридический адрес",
+    "company_phone": "Телефон",
+    "company_website": "Сайт / домен",
+    "rules_registration": "Регистрация правил ДУ (номер/дата)",
+    "info_disclosure_address": "Адрес инфо-центра раскрытия",
+    "advertising_label": "Пометка 'РЕКЛАМА'",
+    "risk_disclaimer": "Оговорка о рисках / прошлых периодах",
+}
+
+
+def _format_found_attributes(attrs: dict) -> str:
+    """Форматирует found_attributes в читаемый блок для Stage 2.
+
+    Пишет ТОЛЬКО присутствующие (не-null) атрибуты, чтобы Stage 2 видел
+    что уже найдено и не дублировал их в risks как "отсутствует". Если
+    ничего не найдено — возвращает явное "(нет идентифицированных реквизитов)".
+    """
+    if not isinstance(attrs, dict) or not attrs:
+        return "(нет идентифицированных реквизитов)"
+    lines: list[str] = []
+    for key, label in _ATTR_LABELS.items():
+        val = attrs.get(key)
+        if val and isinstance(val, str) and val.strip() and val.lower() != "null":
+            lines.append(f"- {label}: {val.strip()}")
+    if not lines:
+        return "(нет идентифицированных реквизитов)"
+    return "\n".join(lines)
+
+
+# Человекочитаемые лейблы для UI thinking-стрима.
+_MATERIAL_KIND_RU = {
+    "commercial_advertising": "Реклама конкретного объекта",
+    "informational": "Информационный/обзорный материал",
+    "mixed": "Смешанный материал",
+}
+
+_CATEGORY_RU = {
+    "alcohol": "алкоголь",
+    "tobacco": "табак",
+    "medicines": "лекарства",
+    "bad": "БАД",
+    "sports_nutrition": "спортивное питание",
+    "medical_services": "медицинские услуги",
+    "financial_services": "финансовые услуги",
+    "securities": "ценные бумаги / ПИФ",
+    "real_estate": "недвижимость",
+    "gambling": "игорный бизнес",
+    "child_products": "детские товары",
+    "food": "пищевые продукты",
+    "general_services": "услуги (общие)",
+    "general_goods": "товары (общие)",
+    "other": "иная категория",
+}
+
+
+def _humanize_classification(classification: dict) -> str:
+    """Build human-readable classification label for UI thinking events.
+
+    Examples:
+      - "Информационный/обзорный материал"
+      - "Реклама конкретного объекта (финансовые услуги)"
+    """
+    kind = classification.get("material_kind") or ""
+    category = classification.get("category")
+    kind_label = _MATERIAL_KIND_RU.get(kind, "Материал не классифицирован")
+    if category and isinstance(category, str):
+        cat_label = _CATEGORY_RU.get(category, category)
+        return f"{kind_label} ({cat_label})"
+    return kind_label
 
 
 def _parse_json(raw: str) -> dict:

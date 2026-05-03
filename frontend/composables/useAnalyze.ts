@@ -20,7 +20,13 @@ const result = ref<AnalyzeResult | null>(null)
 const analyzing = ref(false)
 const error = ref<string | null>(null)
 const materialText = ref<string>('')
+const materialTitle = ref<string>('')  // имя файла без расширения, либо title из истории
 const savedId = ref<string | null>(null)
+
+function stripExtension(name: string): string {
+  const dot = name.lastIndexOf('.')
+  return dot > 0 ? name.slice(0, dot) : name
+}
 
 export function useAnalyze() {
   const config = useRuntimeConfig()
@@ -34,12 +40,14 @@ export function useAnalyze() {
     error.value = null
     analyzing.value = false
     materialText.value = ''
+    materialTitle.value = ''
     savedId.value = null
   }
 
   // Подгружаем сохранённый анализ напрямую в состояние (без стрима).
   function loadSaved(payload: {
     id: string
+    title?: string
     ad_text: string
     result: any
     citations?: any[]
@@ -47,6 +55,7 @@ export function useAnalyze() {
     reset()
     savedId.value = payload.id
     materialText.value = payload.ad_text || ''
+    materialTitle.value = payload.title || ''
     result.value = payload.result as AnalyzeResult
     citations.value = (payload.citations || []).map((c: any) => ({
       id: c.chunk_id ?? c.id,
@@ -62,6 +71,7 @@ export function useAnalyze() {
 
     reset()
     analyzing.value = true
+    if (file) materialTitle.value = stripExtension(file.name)
 
     try {
       const formData = new FormData()
@@ -85,7 +95,8 @@ export function useAnalyze() {
         return
       }
       if (response.status === 413) {
-        error.value = 'Файл слишком большой'
+        error.value = 'Файл слишком большой. Максимум 10 МБ.'
+        useToast().show('Файл слишком большой. Максимум 10 МБ.', 'error', 5000)
         return
       }
       if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`)
@@ -130,6 +141,9 @@ export function useAnalyze() {
               break
             case 'saved': {
               savedId.value = event.id || null
+              // Бэк возвращает финальный title (имя файла без расширения,
+              // либо первая фраза текста). Перетираем локальный title.
+              if (event.title) materialTitle.value = event.title
               if (event.id) {
                 useAnalysisHistory().prepend({
                   id: event.id,
@@ -160,6 +174,7 @@ export function useAnalyze() {
     analyzing: readonly(analyzing),
     error: readonly(error),
     materialText: readonly(materialText),
+    materialTitle: readonly(materialTitle),
     savedId: readonly(savedId),
     analyze,
     reset,
