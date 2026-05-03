@@ -6,7 +6,6 @@ interface User {
 }
 
 const authRoutes = ['/auth/login', '/auth/register']
-const token = ref<string | null>(null)
 const user = ref<User | null>(null)
 const loading = ref(false)
 const initialized = ref(false)
@@ -24,71 +23,24 @@ function isAuthRoute(path: string): boolean {
   return authRoutes.includes(pathname || path)
 }
 
-function currentLocationPath(): string {
-  if (import.meta.server) return '/'
-  return `${window.location.pathname}${window.location.search}${window.location.hash}`
+// Cleanup для разработчиков с остатками от старой Bearer-схемы.
+function clearLegacyTokenStorage() {
+  if (!import.meta.client) return
+  try {
+    localStorage.removeItem('lb-token')
+  } catch {
+    /* noop */
+  }
+  // Старую cookie 'lb-token' (не HttpOnly, ставилась Nuxt'ом) удаляем явно.
+  document.cookie = 'lb-token=; Path=/; Max-Age=0; SameSite=Lax'
 }
 
 export function useAuth() {
   const config = useRuntimeConfig()
   const api = config.public.apiBase
-  const router = useRouter()
-  const tokenCookie = useCookie<string | null>('lb-token', {
-    sameSite: 'lax',
-    watch: false,
-  })
 
   function clearAuthState() {
-    token.value = null
     user.value = null
-    tokenCookie.value = null
-    if (import.meta.client) {
-      localStorage.removeItem('lb-token')
-    }
-  }
-
-  function persistToken(nextToken: string) {
-    token.value = nextToken
-    tokenCookie.value = nextToken
-    if (import.meta.client) {
-      localStorage.setItem('lb-token', nextToken)
-    }
-  }
-
-  function readStoredToken() {
-    if (token.value) return token.value
-    if (import.meta.client) {
-      return localStorage.getItem('lb-token') || tokenCookie.value || null
-    }
-    return tokenCookie.value || null
-  }
-
-  function hasStoredToken() {
-    return !!readStoredToken()
-  }
-
-  function buildLoginRedirect(nextPath?: unknown) {
-    const safeNext = normalizeInternalPath(nextPath)
-    if (!safeNext || isAuthRoute(safeNext)) return '/auth/login'
-    return `/auth/login?next=${encodeURIComponent(safeNext)}`
-  }
-
-  function resolvePostAuthRedirect(nextPath?: unknown) {
-    const safeNext = normalizeInternalPath(nextPath)
-    if (!safeNext || isAuthRoute(safeNext)) return '/'
-    return safeNext
-  }
-
-  async function redirectToLogin(nextPath?: string) {
-    if (import.meta.server) return
-    const target = buildLoginRedirect(nextPath ?? currentLocationPath())
-    if (currentLocationPath() === target) return
-    await router.replace(target)
-  }
-
-  async function handleUnauthorized(nextPath?: string) {
-    clearAuthState()
-    await redirectToLogin(nextPath)
   }
 
   async function init() {
@@ -97,13 +49,9 @@ export function useAuth() {
     if (initPromise) return initPromise
 
     initPromise = (async () => {
-      const saved = readStoredToken()
-      if (!saved) {
-        clearAuthState()
-        return
-      }
-
-      persistToken(saved)
+      clearLegacyTokenStorage()
+      // Cookie летит автоматически с credentials: 'include'.
+      // Если не залогинен — fetchMe вернёт 401, user останется null.
       await fetchMe()
       if (user.value) {
         await useBilling().refresh()
@@ -116,18 +64,15 @@ export function useAuth() {
     return initPromise
   }
 
-  function authHeaders(): Record<string, string> {
-    return token.value ? { Authorization: `Bearer ${token.value}` } : {}
-  }
-
   async function login(email: string, password: string) {
     loading.value = true
     try {
-      const res = await $fetch<{ Token: string; UserID: string }>(`${api}/auth/login`, {
+      // Сервер ставит HttpOnly cookie 'lb-session' через Set-Cookie.
+      await $fetch(`${api}/auth/login`, {
         method: 'POST',
         body: { Email: email, Password: password },
+        credentials: 'include',
       })
-      persistToken(res.Token)
       initialized.value = true
       await fetchMe()
       await useBilling().refresh()
@@ -155,16 +100,13 @@ export function useAuth() {
   }
 
   async function fetchMe() {
-    if (!token.value) return
     try {
       const res = await $fetch<{
         ID: string
         Email: string
         Role: string
         PreferredPalette: string
-      }>(`${api}/auth/me`, {
-        headers: authHeaders(),
-      })
+      }>(`${api}/auth/me`, { credentials: 'include' })
       user.value = {
         id: res.ID,
         email: res.Email,
@@ -172,44 +114,53 @@ export function useAuth() {
         preferred_palette: res.PreferredPalette || 'navy',
       }
     } catch (e: any) {
-      // 401 = stale token. Just clear state — global auth middleware handles
-      // the redirect via navigateTo. Calling router.replace from here while
-      // a navigation is already in flight cancels both.
       if (e?.status === 401 || e?.statusCode === 401) {
+        // Cookie не валидна / отсутствует — просто чистим state.
+        // Редирект делает watcher в app.vue.
         clearAuthState()
       }
     }
   }
 
   async function logout() {
-    const currentToken = token.value
     try {
-      if (currentToken) {
-        await $fetch(`${api}/auth/logout`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${currentToken}` },
-        })
-      }
+      await $fetch(`${api}/auth/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      })
     } catch {
-      // Local cleanup still happens if the server session is already gone.
+      // Cookie уже невалидна — серверу нечего удалять, всё ок.
     }
+    // Редирект делает watcher в app.vue (на user → null).
     clearAuthState()
-    await router.replace('/auth/login')
   }
 
   async function changePassword(currentPassword: string, newPassword: string) {
     await $fetch(`${api}/auth/password`, {
       method: 'PUT',
-      headers: authHeaders(),
       body: { current_password: currentPassword, new_password: newPassword },
+      credentials: 'include',
     })
+    // Сервер инвалидирует все сессии и чистит cookie — разлогиниваемся.
+    clearAuthState()
   }
 
   const isLoggedIn = computed(() => !!user.value)
   const isAdmin = computed(() => user.value?.role === 'admin')
 
+  function buildLoginRedirect(nextPath?: unknown) {
+    const safeNext = normalizeInternalPath(nextPath)
+    if (!safeNext || isAuthRoute(safeNext)) return '/auth/login'
+    return `/auth/login?next=${encodeURIComponent(safeNext)}`
+  }
+
+  function resolvePostAuthRedirect(nextPath?: unknown) {
+    const safeNext = normalizeInternalPath(nextPath)
+    if (!safeNext || isAuthRoute(safeNext)) return '/'
+    return safeNext
+  }
+
   return {
-    token: readonly(token),
     user: readonly(user),
     loading: readonly(loading),
     initialized: readonly(initialized),
@@ -221,10 +172,8 @@ export function useAuth() {
     logout,
     changePassword,
     fetchMe,
-    handleUnauthorized,
-    authHeaders,
+    clearAuthState,
     buildLoginRedirect,
     resolvePostAuthRedirect,
-    hasStoredToken,
   }
 }

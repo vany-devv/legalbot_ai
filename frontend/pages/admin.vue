@@ -141,7 +141,7 @@ useHead({ title: 'Администрирование' })
 
 const config = useRuntimeConfig()
 const api = config.public.apiBase
-const { authHeaders } = useAuth()
+useAuth() // ensure auth state initialized — actual cookie travels automatically
 
 const fileInput = ref<HTMLInputElement | null>(null)
 const file = ref<File | null>(null)
@@ -169,7 +169,7 @@ function stopPolling() {
 }
 async function pollJob(jobId: string) {
   try {
-    const j = await $fetch<IngestJob>(`${api}/rag/ingest/jobs/${jobId}`, { headers: authHeaders() })
+    const j = await $fetch<IngestJob>(`${api}/rag/ingest/jobs/${jobId}`, { credentials: 'include' })
     job.value = j
     if (j.status === 'done') {
       uploadSuccess.value = `Готово — добавлено ${j.chunks_added} чанков`
@@ -224,7 +224,7 @@ async function upload() {
   form.append('title', title.value)
   form.append('doc_type', docType.value)
   try {
-    const res = await $fetch<IngestJob>(`${api}/rag/ingest/upload`, { method: 'POST', body: form, headers: authHeaders() })
+    const res = await $fetch<IngestJob>(`${api}/rag/ingest/upload`, { method: 'POST', body: form, credentials: 'include' })
     job.value = res; file.value = null; title.value = ''
     if (fileInput.value) fileInput.value.value = ''
     localStorage.setItem('lb-active-job', res.job_id)
@@ -238,7 +238,7 @@ async function upload() {
 async function loadDocuments() {
   loading.value = true
   try {
-    documents.value = await $fetch<DocInfo[]>(`${api}/rag/documents`, { headers: authHeaders() })
+    documents.value = await $fetch<DocInfo[]>(`${api}/rag/documents`, { credentials: 'include' })
   } catch (e: any) {
     uploadError.value = e?.data?.detail || e?.message || 'Не удалось загрузить список документов'
   } finally { loading.value = false }
@@ -247,7 +247,7 @@ async function loadDocuments() {
 async function deleteDoc(sourceId: string) {
   if (!confirm('Удалить документ и все его чанки?')) return
   try {
-    await $fetch(`${api}/rag/documents/${sourceId}`, { method: 'DELETE', headers: authHeaders() })
+    await $fetch(`${api}/rag/documents/${sourceId}`, { method: 'DELETE', credentials: 'include' })
     await loadDocuments()
   } catch (e: any) {
     uploadError.value = e?.data?.detail || e?.message || 'Не удалось удалить документ'

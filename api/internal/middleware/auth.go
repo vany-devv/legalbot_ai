@@ -3,9 +3,10 @@ package middleware
 import (
 	"context"
 	"net/http"
-	"strings"
+	"time"
 
 	"github.com/google/uuid"
+	"legalbot/services/internal/auth/cookie"
 	"legalbot/services/internal/auth/domain"
 	"legalbot/services/internal/pkg/logger"
 )
@@ -34,19 +35,13 @@ func Auth(
 		ctx := r.Context()
 		log := logger.FromCtx(ctx)
 
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" {
-			log.Warn("auth_failed", "reason", "missing_header")
+		c, err := r.Cookie(cookie.SessionCookieName)
+		if err != nil || c.Value == "" {
+			log.Warn("auth_failed", "reason", "missing_cookie")
 			http.Error(w, "authorization required", http.StatusUnauthorized)
 			return
 		}
-
-		token := strings.TrimPrefix(authHeader, "Bearer ")
-		if token == authHeader {
-			log.Warn("auth_failed", "reason", "invalid_format")
-			http.Error(w, "invalid authorization format", http.StatusUnauthorized)
-			return
-		}
+		token := c.Value
 
 		userID, err := tokenGen.Validate(token)
 		if err != nil {
@@ -67,6 +62,21 @@ func Auth(
 			log.Warn("auth_failed", "reason", "session_user_mismatch", "user_id", userID)
 			http.Error(w, "invalid session", http.StatusUnauthorized)
 			return
+		}
+
+		// Sliding refresh: продлеваем expires_at если с прошлого обновления
+		// прошло > SlidingThrottle. Так избегаем write-spam в БД при активной сессии.
+		now := time.Now()
+		newExpiresAt := now.Add(cookie.SessionTTL)
+		// session.ExpiresAt = lastRefresh + SessionTTL → lastRefresh = session.ExpiresAt - SessionTTL
+		// если новое значение больше старого на > SlidingThrottle, обновляем.
+		if newExpiresAt.Sub(session.ExpiresAt) > cookie.SlidingThrottle {
+			if err := sessionRepo.RefreshExpiry(ctx, session.ID, newExpiresAt); err != nil {
+				log.Warn("session_refresh_failed", "err", err.Error(), "user_id", userID)
+				// не прерываем запрос — sliding неудача не должна логаутить юзера
+			} else {
+				cookie.SetSession(w, token, cookie.IsSecureRequest(r))
+			}
 		}
 
 		ctx = context.WithValue(ctx, UserIDKey, userID)

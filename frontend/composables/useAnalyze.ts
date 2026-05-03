@@ -25,7 +25,7 @@ const savedId = ref<string | null>(null)
 export function useAnalyze() {
   const config = useRuntimeConfig()
   const api = config.public.apiBase
-  const { authHeaders, handleUnauthorized } = useAuth()
+  const { clearAuthState } = useAuth()
 
   function reset() {
     thinking.value = []
@@ -71,7 +71,7 @@ export function useAnalyze() {
 
       const response = await fetch(`${api}/analyze/stream`, {
         method: 'POST',
-        headers: { ...authHeaders() },
+        credentials: 'include',
         body: formData,
       })
 
@@ -81,7 +81,7 @@ export function useAnalyze() {
         return
       }
       if (response.status === 401) {
-        await handleUnauthorized()
+        clearAuthState()
         return
       }
       if (response.status === 413) {

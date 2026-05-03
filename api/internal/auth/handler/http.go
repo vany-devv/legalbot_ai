@@ -3,9 +3,9 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
-	"strings"
 
 	"github.com/google/uuid"
+	"legalbot/services/internal/auth/cookie"
 	"legalbot/services/internal/auth/usecase"
 	"legalbot/services/internal/middleware"
 )
@@ -84,8 +84,15 @@ func (h *AuthHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Кладём токен в HttpOnly cookie. Тело ответа отдаёт UserID/ExpiresAt
+	// для UI, без самого токена (он клиенту не нужен — браузер сам пошлёт cookie).
+	cookie.SetSession(w, resp.Token, cookie.IsSecureRequest(r))
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	json.NewEncoder(w).Encode(map[string]any{
+		"user_id":    resp.UserID,
+		"expires_at": resp.ExpiresAt,
+	})
 }
 
 func (h *AuthHandler) handleChangePassword(w http.ResponseWriter, r *http.Request) {
@@ -125,6 +132,9 @@ func (h *AuthHandler) handleChangePassword(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Все сессии этого юзера были инвалидированы — чистим cookie тоже.
+	cookie.ClearSession(w, cookie.IsSecureRequest(r))
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"message": "password changed successfully"})
 }
@@ -134,19 +144,20 @@ func (h *AuthHandler) handleMe(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" {
-		http.Error(w, "Authorization header required", http.StatusUnauthorized)
+
+	// userID кладёт в контекст auth-middleware после валидации cookie+сессии.
+	userIDStr, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		http.Error(w, "Authorization required", http.StatusUnauthorized)
+		return
+	}
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusUnauthorized)
 		return
 	}
 
-	token := strings.TrimPrefix(authHeader, "Bearer ")
-	if token == authHeader {
-		http.Error(w, "Invalid authorization format", http.StatusUnauthorized)
-		return
-	}
-
-	resp, err := h.getMeUseCase.Execute(r.Context(), token)
+	resp, err := h.getMeUseCase.Execute(r.Context(), userID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
@@ -162,23 +173,23 @@ func (h *AuthHandler) handleLogout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" {
-		http.Error(w, "Authorization header required", http.StatusUnauthorized)
+	c, err := r.Cookie(cookie.SessionCookieName)
+	if err != nil || c.Value == "" {
+		// Нет cookie — нечего инвалидировать. Возвращаем 204, чтобы клиент
+		// мог идемпотентно вызывать logout без особых проверок.
+		cookie.ClearSession(w, cookie.IsSecureRequest(r))
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
-	token := strings.TrimPrefix(authHeader, "Bearer ")
-	if token == authHeader {
-		http.Error(w, "Invalid authorization format", http.StatusUnauthorized)
+	if err := h.logoutUseCase.Execute(r.Context(), c.Value); err != nil {
+		// Сессии в БД нет — всё равно чистим cookie на клиенте.
+		cookie.ClearSession(w, cookie.IsSecureRequest(r))
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
-	if err := h.logoutUseCase.Execute(r.Context(), token); err != nil {
-		http.Error(w, "Invalid session", http.StatusUnauthorized)
-		return
-	}
-
+	cookie.ClearSession(w, cookie.IsSecureRequest(r))
 	w.WriteHeader(http.StatusNoContent)
 }
 

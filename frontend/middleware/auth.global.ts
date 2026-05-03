@@ -1,13 +1,7 @@
 export default defineNuxtRouteMiddleware(async (to) => {
+  // SSR отключён (nuxt.config.ts: ssr: false), middleware всегда на клиенте.
   const auth = useAuth()
   const isPublicAuthRoute = to.path === '/auth/login' || to.path === '/auth/register'
-
-  if (import.meta.server) {
-    if (!auth.hasStoredToken() && !isPublicAuthRoute) {
-      return navigateTo(auth.buildLoginRedirect(to.fullPath), { replace: true })
-    }
-    return
-  }
 
   await auth.init()
 

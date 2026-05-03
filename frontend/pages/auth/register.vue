@@ -1,18 +1,6 @@
 <template>
   <div class="relative flex items-center justify-center min-h-screen bg-canvas px-6">
 
-    <!-- Back arrow -->
-    <NuxtLink
-      to="/"
-      class="absolute top-5 left-5 flex items-center justify-center w-11 h-11 rounded-xl text-ink-faint hover:text-ink hover:bg-dimmed transition-colors"
-      title="На главную"
-    >
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="19" y1="12" x2="5" y2="12"/>
-        <polyline points="12 19 5 12 12 5"/>
-      </svg>
-    </NuxtLink>
-
     <div class="w-full max-w-[420px] flex flex-col gap-7">
 
       <!-- Brand -->

@@ -16,11 +16,15 @@ func NewJWTTokenGenerator(secret string) domain.TokenGenerator {
 	return &JWTTokenGenerator{secret: secret}
 }
 
+// jwtTTL — верхняя граница жизни JWT. Реально срок сессии контролируется через
+// sessions.expires_at + sliding refresh в auth-middleware.
+const jwtTTL = 20 * 24 * time.Hour
+
 func (g *JWTTokenGenerator) Generate(userID string) (string, error) {
 	claims := jwt.MapClaims{
 		"user_id": userID,
-		"exp":      time.Now().Add(24 * time.Hour).Unix(),
-		"iat":      time.Now().Unix(),
+		"exp":     time.Now().Add(jwtTTL).Unix(),
+		"iat":     time.Now().Unix(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(g.secret))
