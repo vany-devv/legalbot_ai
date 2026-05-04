@@ -448,10 +448,9 @@ async def analyze(
         len({(r.meta.get("law"), r.meta.get("article")) for r in supplementary}),
     )
 
-    raw = await llm.complete(system=AD_ANALYSIS_SYSTEM_PROMPT, user=user_msg)
+    parsed, raw = await _analyze_stage2(llm, AD_ANALYSIS_SYSTEM_PROMPT, user_msg)
     logger.info("[ANALYZE] LLM raw output:\n%s", raw)
 
-    parsed = _parse_json(raw)
     risks = parsed.get("risks", [])
     logger.info(
         "analyze_completed",
@@ -527,10 +526,9 @@ async def analyze_stream(
             supplementary_context=supplementary_ctx,
         )
 
-        raw = await llm.complete(system=AD_ANALYSIS_SYSTEM_PROMPT, user=user_msg)
+        parsed, raw = await _analyze_stage2(llm, AD_ANALYSIS_SYSTEM_PROMPT, user_msg)
         logger.info("[ANALYZE] LLM raw output:\n%s", raw)
 
-        parsed = _parse_json(raw)
         risks = parsed.get("risks", [])
         logger.info(
             "analyze_completed",
@@ -666,7 +664,12 @@ def _humanize_classification(classification: dict) -> str:
 
 
 def _parse_json(raw: str) -> dict:
-    """Try to parse LLM output as JSON, handling markdown code blocks."""
+    """Try to parse LLM output as JSON, handling markdown code blocks.
+
+    Если стандартный парсинг упал (GigaChat изредка эмитит лишний `\\"`
+    посреди string-полей), пробуем восстановить структуру вручную через
+    `_recover_analysis()` — анализ модели уже сделан, незачем ретраить.
+    """
     text = raw.strip()
     if text.startswith("```"):
         lines = text.split("\n", 1)
@@ -685,4 +688,113 @@ def _parse_json(raw: str) -> dict:
                 return json.loads(text[start:end + 1])
             except json.JSONDecodeError:
                 pass
+
+    # Стандартный парсинг сдох — пробуем спасти то что есть.
+    recovered = _recover_analysis(text)
+    if recovered:
+        logger.warning(
+            "[PARSE] standard JSON failed, recovered %d risks from malformed output",
+            len(recovered.get("risks", [])),
+        )
+        return recovered
+
+    logger.warning(
+        "[PARSE] failed to parse LLM JSON, raw_len=%d head=%r tail=%r",
+        len(raw),
+        raw[:200],
+        raw[-200:],
+    )
     return {}
+
+
+_RISK_FIELDS = ("fragment", "law_reference", "risk_level", "description", "suggestion")
+
+
+def _recover_analysis(text: str) -> dict:
+    """Вытаскивает risks/summary/overall_risk_level из битого LLM-вывода.
+
+    Стратегия: вместо парсинга всего объекта целиком, сканируем text и для
+    каждого поля каждого риска вытаскиваем значение по паттерну
+    `"field": "..."` с хвостовым закрывающим `"` перед `,` или `\\n`.
+    Это толерантнее к лишним `\\"` внутри значения чем json.loads.
+    """
+    risks: list[dict] = []
+    # Бьём text на блоки по `"fragment":` — каждое появление = новый риск.
+    parts = re.split(r'"fragment"\s*:\s*', text)[1:]
+    for part in parts:
+        risk: dict = {}
+        # fragment — первое поле, его значение в начале текущего part.
+        frag = _extract_string_value(part)
+        if not frag:
+            continue
+        risk["fragment"] = frag
+        for field in _RISK_FIELDS[1:]:
+            m = re.search(rf'"{field}"\s*:\s*', part)
+            if not m:
+                continue
+            val = _extract_string_value(part[m.end():])
+            if val:
+                risk[field] = val
+        # Минимум должен быть fragment + хотя бы description или risk_level.
+        if "description" in risk or "risk_level" in risk:
+            risks.append(risk)
+
+    if not risks:
+        return {}
+
+    # summary и overall — best-effort, не критичны.
+    summary = ""
+    m = re.search(r'"summary"\s*:\s*', text)
+    if m:
+        summary = _extract_string_value(text[m.end():]) or ""
+    overall = "high"  # дефолт безопасный — раз есть риски, не ставить low
+    m = re.search(r'"overall_risk_level"\s*:\s*"(low|medium|high)"', text)
+    if m:
+        overall = m.group(1)
+
+    return {"risks": risks, "summary": summary, "overall_risk_level": overall}
+
+
+def _extract_string_value(s: str) -> str:
+    """Достаёт значение JSON-строки, начиная с `"` в s.
+
+    Толерантно к лишним `\\"` внутри: ищем закрывающий `"` который идёт
+    перед `,`, `\\n`, или `}` (т.е. структурным разделителем).
+    """
+    s = s.lstrip()
+    if not s.startswith('"'):
+        return ""
+    # Ищем закрывающую кавычку, за которой следует структурный разделитель.
+    # Это `"` + опц. пробелы/перевод + `,` или `}` или `\n  "` (next field).
+    m = re.search(r'"\s*(?:,|\}|\n\s*"|$)', s[1:])
+    if not m:
+        return ""
+    inner = s[1:1 + m.start()]
+    # Распаковываем стандартные escape'ы. Лишние `\"` внутри теперь просто `"`.
+    inner = inner.replace('\\"', '"').replace('\\n', '\n').replace('\\\\', '\\')
+    return inner.strip()
+
+
+async def _analyze_stage2(
+    llm: LLMProvider, system: str, user: str,
+) -> tuple[dict, str]:
+    """Stage 2 с recovery + один ретрай если совсем ничего не вытащили.
+
+    Порядок защиты:
+      1) llm.complete → _parse_json (json.loads → fallback → recovery)
+      2) если risks пуст — ретрай. Это покрывает редкий случай когда
+         модель вернула не-JSON или совершенно битую структуру где даже
+         regex-recovery не нашёл ни одного `"fragment":`.
+    """
+    raw = await llm.complete(system=system, user=user)
+    parsed = _parse_json(raw)
+    if parsed.get("risks"):
+        return parsed, raw
+    logger.warning("[ANALYZE] empty risks after parse+recovery, retrying once")
+    raw2 = await llm.complete(system=system, user=user)
+    parsed2 = _parse_json(raw2)
+    if parsed2.get("risks"):
+        logger.info("[ANALYZE] retry succeeded with %d risks", len(parsed2["risks"]))
+        return parsed2, raw2
+    # Возвращаем что есть (возможно пустое) — клиент увидит {} и поймёт что не сработало.
+    return parsed or parsed2, raw2 if parsed2 else raw

@@ -15,6 +15,9 @@ from app.logging_setup import request_id_var
 
 logger = logging.getLogger(__name__)
 
+# Пути, для которых не пишем INFO-лог (засоряют поток). 4xx/5xx всё равно логируются.
+_SILENT_PATHS = frozenset({"/health"})
+
 
 class RequestContextMiddleware(BaseHTTPMiddleware):
     """Кладёт X-Request-ID в ContextVar и пишет http_request лог на каждый запрос."""
@@ -37,17 +40,21 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 level = logging.ERROR
             elif status >= 400:
                 level = logging.WARNING
-            logger.log(
-                level,
-                "http_request",
-                extra={
-                    "method": request.method,
-                    "path": request.url.path,
-                    "status": status,
-                    "duration_ms": duration_ms,
-                    "remote_addr": request.client.host if request.client else "",
-                },
-            )
+            # Health-чеки (200) скипаем — они идут раз в 30 сек и забивают логи.
+            # 4xx/5xx на /health всё равно логируем, чтобы видеть деградации.
+            silent = level == logging.INFO and request.url.path in _SILENT_PATHS
+            if not silent:
+                logger.log(
+                    level,
+                    "http_request",
+                    extra={
+                        "method": request.method,
+                        "path": request.url.path,
+                        "status": status,
+                        "duration_ms": duration_ms,
+                        "remote_addr": request.client.host if request.client else "",
+                    },
+                )
             request_id_var.reset(token)
 
 
