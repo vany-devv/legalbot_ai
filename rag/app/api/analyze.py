@@ -448,10 +448,9 @@ async def analyze(
         len({(r.meta.get("law"), r.meta.get("article")) for r in supplementary}),
     )
 
-    raw = await llm.complete(system=AD_ANALYSIS_SYSTEM_PROMPT, user=user_msg)
+    parsed, raw = await _analyze_with_retry(llm, AD_ANALYSIS_SYSTEM_PROMPT, user_msg)
     logger.info("[ANALYZE] LLM raw output:\n%s", raw)
 
-    parsed = _parse_json(raw)
     risks = parsed.get("risks", [])
     logger.info(
         "analyze_completed",
@@ -527,10 +526,9 @@ async def analyze_stream(
             supplementary_context=supplementary_ctx,
         )
 
-        raw = await llm.complete(system=AD_ANALYSIS_SYSTEM_PROMPT, user=user_msg)
+        parsed, raw = await _analyze_with_retry(llm, AD_ANALYSIS_SYSTEM_PROMPT, user_msg)
         logger.info("[ANALYZE] LLM raw output:\n%s", raw)
 
-        parsed = _parse_json(raw)
         risks = parsed.get("risks", [])
         logger.info(
             "analyze_completed",
@@ -685,4 +683,33 @@ def _parse_json(raw: str) -> dict:
                 return json.loads(text[start:end + 1])
             except json.JSONDecodeError:
                 pass
+    # Логируем диагностику чтобы видеть в Loki частоту JSON-failures.
+    logger.warning(
+        "[PARSE] failed to parse LLM JSON, raw_len=%d head=%r tail=%r",
+        len(raw),
+        raw[:200],
+        raw[-200:],
+    )
     return {}
+
+
+async def _analyze_with_retry(
+    llm: LLMProvider, system: str, user: str, max_attempts: int = 2,
+) -> tuple[dict, str]:
+    """Stage 2 с одним ретраем при невалидном JSON.
+
+    GigaChat-Pro изредка эмитит сломанные escape'ы в длинных string-полях
+    (lишний `\\"` посреди description), из-за чего весь массив risks теряется.
+    Повторный вызов на той же выборке почти всегда даёт чистый JSON.
+    Возвращает (parsed_dict, raw_text_последней_попытки).
+    """
+    raw = ""
+    for attempt in range(1, max_attempts + 1):
+        raw = await llm.complete(system=system, user=user)
+        parsed = _parse_json(raw)
+        if parsed:
+            if attempt > 1:
+                logger.info("[ANALYZE] parse succeeded on attempt %d", attempt)
+            return parsed, raw
+        logger.warning("[ANALYZE] empty parse on attempt %d/%d, retrying", attempt, max_attempts)
+    return {}, raw
