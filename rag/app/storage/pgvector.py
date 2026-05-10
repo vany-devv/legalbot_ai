@@ -177,6 +177,9 @@ class VectorRepository:
         if not article_refs:
             return []
 
+        # meta.article в БД хранится с trailing dot (например "5.", "38."),
+        # а классификатор возвращает номер без точки. Сравниваем нормализованные
+        # значения через rtrim точки с обеих сторон.
         conditions = []
         params: list[str] = []
         for i, ref in enumerate(article_refs):
@@ -184,7 +187,7 @@ class VectorRepository:
             art_param = i * 2 + 2
             conditions.append(
                 f"(rc.meta->>'law' LIKE '%' || ${law_param} || '%' "
-                f"AND rc.meta->>'article' = ${art_param})"
+                f"AND rtrim(rc.meta->>'article', '.') = rtrim(${art_param}, '.'))"
             )
             params.extend([str(ref["law"]), str(ref["article"])])
 
