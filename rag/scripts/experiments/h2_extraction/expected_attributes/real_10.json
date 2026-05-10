@@ -1,0 +1,11 @@
+{
+  "material_id": "real_10",
+  "format": "pdf",
+  "category": "real_estate",
+  "source_url": "https://fas.gov.ru/spheres/1",
+  "expected_attributes": {
+    "object_name": "ЖК «Северный»",
+    "company_name": "СЗ ЛСР",
+    "website": "lsr.ru"
+  }
+}

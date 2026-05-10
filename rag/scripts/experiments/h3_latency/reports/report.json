@@ -1,0 +1,31 @@
+{
+  "n_total": 150,
+  "n_after_warmup": 100,
+  "p50_ms": 14533.0,
+  "p95_ms": 19237.8,
+  "p99_ms": 21410.9,
+  "p95_ci_low": 17314.0,
+  "p95_ci_high": 20445.6,
+  "outlier_count": 0,
+  "outlier_frac": 0.0,
+  "thresholds": {
+    "p95_ms": 60000,
+    "p99_ms": 75000,
+    "outlier_frac": 0.05
+  },
+  "conditions": {
+    "p95_le_threshold_with_ci": true,
+    "p99_le_threshold": true,
+    "outlier_frac_le_threshold": true
+  },
+  "h0_rejected": true,
+  "env_snapshot": {
+    "commit_hash": "b904d4e",
+    "python_version": "Python 3.13.0",
+    "model_provider": "GigaChat-Pro",
+    "embedder_model": "Yandex-256",
+    "corpus_size": 50,
+    "concurrency": 1,
+    "finished_at": "2026-05-10T21:01:35"
+  }
+}

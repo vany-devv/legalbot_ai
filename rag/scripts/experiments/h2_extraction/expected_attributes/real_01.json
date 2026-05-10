@@ -1,0 +1,11 @@
+{
+  "material_id": "real_01",
+  "format": "pdf",
+  "category": "credit_real_estate",
+  "source_url": "https://sovetreklama.org/2024/10/v-reklame-otsutstvovala-informacija-o-sushhestvennyh-uslovijah-finansovoj-usl",
+  "expected_attributes": {
+    "object_name": "квартиры",
+    "company_name": "Альпин билдинг",
+    "website": "alpin.ru"
+  }
+}

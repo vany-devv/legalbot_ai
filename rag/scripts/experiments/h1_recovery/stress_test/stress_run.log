@@ -1,0 +1,23 @@
+Стресс-корпус: 20 материалов
+   [1/20] stress_01_pif_full (pif, 1387 chars): 22.9s
+   [2/20] stress_02_credit_multi (credit, 1244 chars): 18.0s
+   [3/20] stress_03_pharma_multi (pharma, 966 chars): 20.9s
+   [4/20] stress_04_insurance_long (insurance, 1410 chars): 19.1s
+   [5/20] stress_05_mortgage_full (mortgage, 1179 chars): 26.0s
+   [6/20] stress_06_microloans_multi (microloan, 870 chars): 16.8s
+   [7/20] stress_07_alcohol_long (alcohol, 910 chars): 16.7s
+   [8/20] stress_08_education_multi (education, 995 chars): 17.0s
+   [9/20] stress_09_real_estate_long (real_estate, 960 chars): 18.1s
+   [10/20] stress_10_complex_finance (deposit_pif_credit, 1555 chars): 20.7s
+   [11/20] stress_11_pifs_extended (pif_multi, 1252 chars): 27.2s
+   [12/20] stress_12_telecom_complex (telecom, 935 chars): 17.2s
+   [13/20] stress_13_legal_services_multi (legal, 767 chars): 17.8s
+   [14/20] stress_14_nutrition_full (bad_food, 838 chars): 14.5s
+   [15/20] stress_15_complex_quotes (deposit, 963 chars): 20.1s
+   [16/20] stress_16_full_disclaimer (isj, 1617 chars): 26.1s
+   [17/20] stress_17_securities_extended (securities, 1295 chars): 18.6s
+   [18/20] stress_18_gambling_long (gambling, 970 chars): 19.7s
+   [19/20] stress_19_complex_pif (complex_pif, 1363 chars): 24.8s
+   [20/20] stress_20_health_complex (med_services_full, 1301 chars): 17.1s
+
+Готово: ok=20, failed=0, общее время 399 сек

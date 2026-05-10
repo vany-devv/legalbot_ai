@@ -1,0 +1,14 @@
+{
+  "material_id": "real_14",
+  "format": "docx",
+  "category": "pif",
+  "source_url": "https://raiffeisen-capital.ru/",
+  "expected_attributes": {
+    "object_name": "паевые инвестиционные фонды",
+    "company_name": "УК Райффайзен",
+    "license_number": "21-000-1-00640",
+    "company_address": "119002, г. Москва, Смоленская-Сенная площадь, д. 28",
+    "phone": "+7 (495) 777-99-98",
+    "risk_disclaimer": "Стоимость инвестиционных паев может увеличиваться и уменьшаться. Результаты инвестирования в прошлом не определяют доходы в будущем"
+  }
+}

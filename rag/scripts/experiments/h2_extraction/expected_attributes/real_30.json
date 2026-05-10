@@ -1,0 +1,10 @@
+{
+  "material_id": "real_30",
+  "format": "txt",
+  "category": "med_services",
+  "source_url": "https://normativ.kontur.ru/document?moduleId=1&documentId=478313",
+  "expected_attributes": {
+    "object_name": "Лечение геморроя",
+    "company_name": "Therapy Surgery Clinic"
+  }
+}

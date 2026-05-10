@@ -1,0 +1,10 @@
+{
+  "material_id": "real_26",
+  "format": "txt",
+  "category": "credit_card",
+  "source_url": "https://normativ.kontur.ru/document?moduleId=1&documentId=492342",
+  "expected_attributes": {
+    "object_name": "карта Газпромбанка",
+    "company_name": "Газпромбанк"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "material_id": "real_19",
+  "format": "docx",
+  "category": "gambling",
+  "source_url": "https://normativ.kontur.ru/document?documentId=379962&moduleId=1",
+  "expected_attributes": {
+    "object_name": "BingoBoom",
+    "website": "BingoBoom.ru"
+  }
+}

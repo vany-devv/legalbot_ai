@@ -1,0 +1,31 @@
+{
+  "n": 30,
+  "success_rate": 1.0,
+  "preservation_rate": 0.9472,
+  "threshold_success": 0.9,
+  "threshold_preservation": 0.85,
+  "h0_rejected": true,
+  "per_format": {
+    "pdf": {
+      "n": 10,
+      "success_rate": 1.0,
+      "preservation_rate": 0.8917
+    },
+    "docx": {
+      "n": 10,
+      "success_rate": 1.0,
+      "preservation_rate": 1.0
+    },
+    "txt": {
+      "n": 10,
+      "success_rate": 1.0,
+      "preservation_rate": 0.95
+    }
+  },
+  "env_snapshot": {
+    "commit_hash": "b904d4e",
+    "python_version": "Python 3.13.0",
+    "corpus_size": 30,
+    "finished_at": "2026-05-10T21:01:34"
+  }
+}

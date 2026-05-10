@@ -1,0 +1,11 @@
+{
+  "material_id": "real_28",
+  "format": "txt",
+  "category": "credit_card",
+  "source_url": "https://normativ.kontur.ru/document?moduleId=1&documentId=484650",
+  "expected_attributes": {
+    "object_name": "кредитная карта",
+    "company_name": "VTB",
+    "website": "VTB.RU"
+  }
+}

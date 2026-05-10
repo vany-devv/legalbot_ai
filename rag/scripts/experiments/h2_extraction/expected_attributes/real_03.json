@@ -1,0 +1,12 @@
+{
+  "material_id": "real_03",
+  "format": "pdf",
+  "category": "loans",
+  "source_url": "https://sovetreklama.org/2024/10/v-reklame-otsutstvovala-informacija-o-sushhestvennyh-uslovijah-finansovoj-usl",
+  "expected_attributes": {
+    "object_name": "займ",
+    "company_name": "Ломбард Грант",
+    "company_address": "Санкт-Петербург",
+    "website": "lombardgrant.ru"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "material_id": "real_20",
+  "format": "docx",
+  "category": "rx_drug",
+  "source_url": "https://normativ.kontur.ru/document?documentId=394344&moduleId=1",
+  "expected_attributes": {
+    "object_name": "Ангиорус",
+    "website": "Angiorus.ru",
+    "risk_disclaimer": "Есть противопоказания, проконсультируйтесь с врачом"
+  }
+}

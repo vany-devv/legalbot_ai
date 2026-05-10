@@ -1,0 +1,12 @@
+{
+  "material_id": "real_04",
+  "format": "pdf",
+  "category": "legal_services",
+  "source_url": "https://fas.gov.ru/spheres/1",
+  "expected_attributes": {
+    "object_name": "услуги банкротства",
+    "company_name": "Лёгкое дело",
+    "phone": "+7 800 555-12-34",
+    "website": "legkoedelo.ru"
+  }
+}

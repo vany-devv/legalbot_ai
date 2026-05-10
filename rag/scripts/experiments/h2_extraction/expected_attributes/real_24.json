@@ -1,0 +1,10 @@
+{
+  "material_id": "real_24",
+  "format": "txt",
+  "category": "auto",
+  "source_url": "https://normativ.kontur.ru/document?moduleId=1&documentId=491120",
+  "expected_attributes": {
+    "object_name": "Gislaved",
+    "company_name": "Т"
+  }
+}

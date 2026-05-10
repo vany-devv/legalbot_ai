@@ -1,0 +1,10 @@
+{
+  "material_id": "real_27",
+  "format": "txt",
+  "category": "credit_card",
+  "source_url": "https://normativ.kontur.ru/document?moduleId=1&documentId=480944",
+  "expected_attributes": {
+    "object_name": "кредитная карта Альфа-Банка",
+    "company_name": "Альфа-Банк"
+  }
+}

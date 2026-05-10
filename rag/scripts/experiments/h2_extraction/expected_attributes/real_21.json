@@ -1,0 +1,9 @@
+{
+  "material_id": "real_21",
+  "format": "txt",
+  "category": "bad",
+  "source_url": "https://normativ.kontur.ru/document?documentId=376186&moduleId=1",
+  "expected_attributes": {
+    "object_name": "Детримакс Бэби"
+  }
+}

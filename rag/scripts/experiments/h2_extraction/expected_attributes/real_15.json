@@ -1,0 +1,10 @@
+{
+  "material_id": "real_15",
+  "format": "docx",
+  "category": "general_services",
+  "source_url": "https://normativ.kontur.ru/document?moduleId=1&documentId=477053",
+  "expected_attributes": {
+    "object_name": "счёт для бизнеса",
+    "company_name": "А"
+  }
+}

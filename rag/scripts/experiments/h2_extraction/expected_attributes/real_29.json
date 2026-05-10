@@ -1,0 +1,10 @@
+{
+  "material_id": "real_29",
+  "format": "txt",
+  "category": "credit_card",
+  "source_url": "https://sovetreklama.org/2024/10/v-reklame-otsutstvovala-informacija-o-sushhestvennyh-uslovijah-finansovoj-usl",
+  "expected_attributes": {
+    "object_name": "карту Альфа-Банка",
+    "company_name": "Альфа-Банк"
+  }
+}

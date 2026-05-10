@@ -1,0 +1,39 @@
+{
+  "n": 125,
+  "actual_rate": 0.976,
+  "actual_ci_low": 0.9318,
+  "actual_ci_high": 0.9918,
+  "baseline_rate": 0.712,
+  "baseline_ci_low": 0.6272,
+  "baseline_ci_high": 0.7841,
+  "lift": 0.264,
+  "n_problematic": 36,
+  "n_recovered": 33,
+  "recovery_rate": 0.9167,
+  "threshold_lift": 0.25,
+  "threshold_recovery_rate": 0.9,
+  "conditions": {
+    "lift_ge_threshold": true,
+    "recovery_rate_ge_threshold": true
+  },
+  "h0_rejected": true,
+  "parse_path_distribution_A": {
+    "json_loads_ok": 89,
+    "total_failure": 3,
+    "regex_recovery_ok": 31,
+    "bracket_slice_ok": 2
+  },
+  "parse_path_distribution_B": {
+    "json_loads_ok": 89,
+    "total_failure": 36
+  },
+  "env_snapshot": {
+    "commit_hash": "b904d4e",
+    "python_version": "Python 3.13.0",
+    "model_provider": "GigaChat-Pro",
+    "embedder_model": "Yandex-256",
+    "corpus_size": 125,
+    "started_at": "see runs in jsonl",
+    "finished_at": "2026-05-10T21:01:34"
+  }
+}

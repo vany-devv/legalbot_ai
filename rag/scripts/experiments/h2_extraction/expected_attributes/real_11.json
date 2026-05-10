@@ -1,0 +1,12 @@
+{
+  "material_id": "real_11",
+  "format": "docx",
+  "category": "real_estate",
+  "source_url": "https://fas.gov.ru/spheres/1",
+  "expected_attributes": {
+    "object_name": "ЖК «Спектр Восток»",
+    "company_name": "СЗ Спектр Восток",
+    "company_address": "Казань",
+    "website": "spektr-vostok.ru"
+  }
+}

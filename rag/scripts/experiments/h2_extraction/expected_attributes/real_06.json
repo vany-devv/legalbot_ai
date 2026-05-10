@@ -1,0 +1,12 @@
+{
+  "material_id": "real_06",
+  "format": "pdf",
+  "category": "bad",
+  "source_url": "https://sovetreklama.org/2024/11/reklama-badov-pomogajushhih-ot-vseh-boleznej-priznana-nenadlezhashhej/",
+  "expected_attributes": {
+    "object_name": "нанокапли «ОФТАВИЗИН»",
+    "company_name": "Здравомед",
+    "company_address": "Курган",
+    "website": "zdravomed.ru"
+  }
+}

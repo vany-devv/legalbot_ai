@@ -1,0 +1,11 @@
+{
+  "material_id": "real_25",
+  "format": "txt",
+  "category": "deposit",
+  "source_url": "https://normativ.kontur.ru/document?moduleId=1&documentId=495049",
+  "expected_attributes": {
+    "object_name": "вклад «Заоблачный процент 2024»",
+    "company_name": "Газпромбанк",
+    "website": "gazprombank.ru"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "material_id": "real_05",
+  "format": "pdf",
+  "category": "deposit",
+  "source_url": "https://normativ.kontur.ru/document?moduleId=1&documentId=495049",
+  "expected_attributes": {
+    "object_name": "вклад «Накопительный успех»",
+    "company_name": "Банк ГПБ",
+    "website": "gazprombank.ru",
+    "advertising_label": "Реклама"
+  }
+}

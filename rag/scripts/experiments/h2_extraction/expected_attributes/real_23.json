@@ -1,0 +1,9 @@
+{
+  "material_id": "real_23",
+  "format": "txt",
+  "category": "telecom",
+  "source_url": "https://sovetreklama.org/2024/10/v-reklame-otsutstvovala-informacija-o-sushhestvennyh-uslovijah-finansovoj-usl",
+  "expected_attributes": {
+    "object_name": "телефоны"
+  }
+}

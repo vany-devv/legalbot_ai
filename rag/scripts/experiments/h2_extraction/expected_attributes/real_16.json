@@ -1,0 +1,11 @@
+{
+  "material_id": "real_16",
+  "format": "docx",
+  "category": "insurance",
+  "source_url": "https://www.sogaz.ru/",
+  "expected_attributes": {
+    "object_name": "страховые продукты",
+    "company_name": "СОГАЗ",
+    "phone": "8 800 333-08-88"
+  }
+}
