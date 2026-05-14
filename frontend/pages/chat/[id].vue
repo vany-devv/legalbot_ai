@@ -5,7 +5,9 @@
         <p class="text-[15px] text-ink-faint">Загрузка диалога...</p>
       </div>
       <div v-else class="max-w-[780px] mx-auto py-4 w-full">
-        <ChatMessage v-for="msg in messages" :key="msg.id" :message="msg" />
+        <TransitionGroup name="chat-msg" tag="div">
+          <ChatMessage v-for="msg in messages" :key="msg.id" :message="msg" />
+        </TransitionGroup>
         <div v-if="sending" class="flex gap-1 py-4 pl-11">
           <span class="typing-dot" /><span class="typing-dot" /><span class="typing-dot" />
         </div>
@@ -49,6 +51,18 @@ watch(messages, () => scrollIfNeeded(false), { deep: true })
 </script>
 
 <style scoped>
+/* ─── Chat messages entrance ─── */
+.chat-msg-enter-active {
+  transition: opacity 220ms cubic-bezier(0.2, 0.7, 0.2, 1), transform 220ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.chat-msg-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+.chat-msg-move {
+  transition: transform 220ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
 .typing-dot {
   width: 7px; height: 7px; border-radius: 50%;
   background: var(--text-tertiary);

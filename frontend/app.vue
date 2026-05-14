@@ -237,4 +237,40 @@ input, textarea { font: inherit; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
+
+/* ─── Page / Layout transitions ──────────────────────────────────
+   Активируются через nuxt.config.ts:app.pageTransition / layoutTransition.
+   Leave короче чем enter (140 vs 220мс) — общий цикл out→in ощущается
+   snappy, без вялой полу-секунды. */
+.page-fade-enter-active,
+.layout-fade-enter-active {
+  transition: opacity 220ms var(--ease-out), transform 220ms var(--ease-out);
+}
+.page-fade-leave-active,
+.layout-fade-leave-active {
+  transition: opacity 140ms var(--ease-out);
+}
+.page-fade-enter-from,
+.layout-fade-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+.page-fade-leave-to,
+.layout-fade-leave-to {
+  opacity: 0;
+}
+
+/* ─── Reduced motion respect ─────────────────────────────────────
+   Для пользователей с настройкой "уменьшить движение" в OS — все анимации
+   и transitions сворачиваются почти до нуля. Не ломает функциональность,
+   только убирает движение. Не накладывается на runtime-класс
+   `html.no-transition` (он работает на полное отключение при смене темы). */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 </style>

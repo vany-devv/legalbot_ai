@@ -77,6 +77,25 @@ export default {
         'out-soft': 'cubic-bezier(0.2, 0.7, 0.2, 1)',
         'spring':   'cubic-bezier(0.34, 1.3, 0.64, 1)',
       },
+      transitionDuration: {
+        fast: '120ms',
+        base: '180ms',
+        slow: '280ms',
+      },
+      keyframes: {
+        'fade-in-up': {
+          from: { opacity: '0', transform: 'translateY(8px)' },
+          to:   { opacity: '1', transform: 'translateY(0)' },
+        },
+        'fade-out-down': {
+          from: { opacity: '1', transform: 'translateY(0)' },
+          to:   { opacity: '0', transform: 'translateY(4px)' },
+        },
+      },
+      animation: {
+        'fade-in-up':   'fade-in-up 220ms cubic-bezier(0.2, 0.7, 0.2, 1) both',
+        'fade-out-down':'fade-out-down 180ms cubic-bezier(0.2, 0.7, 0.2, 1) both',
+      },
     },
   },
   plugins: [],

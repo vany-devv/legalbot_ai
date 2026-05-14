@@ -16,7 +16,11 @@ export interface AnalyzeResult {
 
 const thinking = ref<ThinkingStep[]>([])
 const citations = ref<Citation[]>([])
-const result = ref<AnalyzeResult | null>(null)
+// risks/summary/overallRiskLevel — раздельные refs чтобы push на risks работал
+// реактивно во время streaming'а (бэк шлёт `risk` события по одному).
+const risks = ref<AdRisk[]>([])
+const summary = ref<string>('')
+const overallRiskLevel = ref<string>('')
 const analyzing = ref(false)
 const error = ref<string | null>(null)
 const materialText = ref<string>('')
@@ -36,13 +40,27 @@ export function useAnalyze() {
   const api = config.public.apiBase
   const { clearAuthState } = useAuth()
 
+  // Computed result — собирает в один объект risks + summary + overall_risk_level
+  // чтобы потребители (analyze/index.vue, [id].vue, RiskCard) видели единый объект.
+  // При streaming'е каждое push в risks.value автоматически триггерит реактивность.
+  const result = computed<AnalyzeResult | null>(() => {
+    if (!risks.value.length && !summary.value && !overallRiskLevel.value) return null
+    return {
+      risks: risks.value,
+      summary: summary.value,
+      overall_risk_level: overallRiskLevel.value,
+    }
+  })
+
   function reset() {
     // Отменяем текущий стрим если он идёт — иначе он продолжит писать в state.
     currentController?.abort()
     currentController = null
     thinking.value = []
     citations.value = []
-    result.value = null
+    risks.value = []
+    summary.value = ''
+    overallRiskLevel.value = ''
     error.value = null
     analyzing.value = false
     materialText.value = ''
@@ -66,7 +84,10 @@ export function useAnalyze() {
     savedId.value = payload.id
     materialText.value = payload.ad_text || ''
     materialTitle.value = payload.title || ''
-    result.value = payload.result as AnalyzeResult
+    const r = (payload.result || {}) as Partial<AnalyzeResult>
+    risks.value = r.risks || []
+    summary.value = r.summary || ''
+    overallRiskLevel.value = r.overall_risk_level || ''
     citations.value = (payload.citations || []).map((c: any) => ({
       id: c.chunk_id ?? c.id,
       score: c.retrieval_score ?? c.score,
@@ -118,6 +139,9 @@ export function useAnalyze() {
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
+      // Флаг — пришёл ли хоть один per-risk event. Если да, финальный backward-compat
+      // `result` event с агрегатом игнорим (мы уже всё накопили).
+      let hasStreamingRisks = false
 
       while (true) {
         const { done, value } = await reader.read()
@@ -142,8 +166,25 @@ export function useAnalyze() {
             case 'thinking':
               thinking.value = [...thinking.value, { text: event.text }]
               break
+            case 'risk':
+              if (event.data) {
+                risks.value.push(event.data as AdRisk)
+                hasStreamingRisks = true
+              }
+              break
+            case 'result_meta':
+              summary.value = event.summary || ''
+              overallRiskLevel.value = event.overall_risk_level || ''
+              break
             case 'result':
-              result.value = event.data as AnalyzeResult
+              // Backward-compat: финальный агрегат от бэка. Если per-risk уже шли —
+              // игнорим (наше состояние уже корректное). Иначе fallback: задаём всё разом.
+              if (!hasStreamingRisks && event.data) {
+                const data = event.data as AnalyzeResult
+                risks.value = data.risks || []
+                summary.value = data.summary || ''
+                overallRiskLevel.value = data.overall_risk_level || ''
+              }
               break
             case 'citations':
               citations.value = (event.data || []).map((c: any) => ({
@@ -194,7 +235,10 @@ export function useAnalyze() {
   return {
     thinking: readonly(thinking),
     citations: readonly(citations),
-    result: readonly(result),
+    result,  // computed — read-only by nature
+    risks: readonly(risks),
+    summary: readonly(summary),
+    overallRiskLevel: readonly(overallRiskLevel),
     analyzing: readonly(analyzing),
     error: readonly(error),
     materialText: readonly(materialText),

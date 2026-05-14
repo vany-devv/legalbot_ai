@@ -143,13 +143,16 @@
         </div>
 
         <!-- ─── REPORT (Workbench layout) ─────────────────────── -->
-        <template v-if="result">
+        <!-- Показываем как только пришёл ad_text — материал виден сразу, риски и
+             правая колонка догружаются по мере streaming'а. -->
+        <template v-if="analyzedText || result">
           <div class="flex flex-col lg:flex-row gap-5">
 
             <!-- LEFT column -->
             <div class="flex-1 min-w-0 flex flex-col gap-5">
 
-              <!-- Material card -->
+              <!-- Material card — плавное появление когда придёт ad_text event -->
+              <Transition name="material-fade" appear>
               <div class="bg-panel border border-rim rounded-xl overflow-hidden">
                 <div class="flex items-center justify-between px-4 py-3 border-b border-rim-faint gap-3">
                   <div class="flex items-center gap-2 min-w-0">
@@ -170,9 +173,10 @@
                   @click="onMaterialClick"
                 />
               </div>
+              </Transition>
 
               <!-- Severity filter chips -->
-              <div v-if="result.risks?.length" class="flex items-center gap-2 flex-wrap">
+              <div v-if="result?.risks?.length" class="flex items-center gap-2 flex-wrap">
                 <span class="text-[11px] font-semibold uppercase tracking-wider text-ink-faint mr-1">Найдено</span>
                 <button
                   v-for="lvl in (['high','medium','low'] as const)"
@@ -195,7 +199,7 @@
               </div>
 
               <!-- Risks heading -->
-              <div v-if="result.risks?.length" class="flex items-center -mb-2">
+              <div v-if="result?.risks?.length" class="flex items-center -mb-2">
                 <span class="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Риски</span>
               </div>
 
@@ -209,12 +213,12 @@
                 <div
                   v-for="(risk, i) in filteredRisks"
                   :key="`${risk.law_reference}-${risk.fragment}-${i}`"
-                  :id="`risk-${result.risks?.indexOf(risk) ?? i}`"
+                  :id="`risk-${result?.risks?.indexOf(risk) ?? i}`"
                   class="risk-card-wrap"
                 >
                   <RiskCard
                     :risk="risk"
-                    :idx="result.risks?.indexOf(risk) ?? i"
+                    :idx="result?.risks?.indexOf(risk) ?? i"
                     @jump-to-fragment="onJumpToFragment"
                   />
                 </div>
@@ -222,15 +226,19 @@
 
               <!-- Empty filter result -->
               <div
-                v-else-if="result.risks?.length && severityFilter"
+                v-else-if="result?.risks?.length && severityFilter"
                 class="text-[13px] text-ink-faint italic px-1"
               >
                 Нет нарушений выбранного уровня.
               </div>
 
-              <!-- No-violations state -->
+              <!-- No-violations state — только когда стрим успешно закончен и рисков
+                   нет. Важно проверять `!error` — иначе при 402/413/network-failure
+                   показывается ложное "Нарушений не выявлено", хотя анализ просто
+                   не прошёл. Также требуем materialText (пришёл `ad_text` event) —
+                   значит бэк реально что-то отдал, а не упал сразу. -->
               <div
-                v-else
+                v-else-if="!analyzing && !error && materialText && !result?.risks?.length"
                 class="bg-ok/10 border border-ok/30 rounded-lg px-4 py-4 text-sm text-ok flex items-center gap-2"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -240,11 +248,25 @@
               </div>
             </div>
 
-            <!-- RIGHT column: collapsible sidebar -->
+            <!-- RIGHT column: collapsible sidebar.
+                 Показываем ТОЛЬКО когда стрим закончен (есть summary/overall) или
+                 citations пришли. Раньше гейт включал risks.length — это вызывало
+                 преждевременный layout-shift: aside появлялся уже после первого
+                 риска (отжимал материал на 320px), а контент score-card ещё ждал
+                 result_meta. Теперь aside и его контент появляются синхронно. -->
             <Transition name="sidebar-slide">
-              <aside v-if="sidebarOpen" class="lg:w-[320px] lg:flex-shrink-0 flex flex-col gap-4">
-                <!-- Score card -->
-                <div class="bg-panel border border-rim rounded-xl p-5 flex flex-col gap-3 items-center text-center">
+              <aside
+                v-if="sidebarOpen && (result?.summary || result?.overall_risk_level || citations.length)"
+                class="lg:w-[320px] lg:flex-shrink-0 flex flex-col gap-4"
+              >
+                <!-- Score card — показываем только когда стрим закончен (пришёл
+                     result_meta → есть summary/overall). Иначе цифра прыгала бы
+                     при каждом push нового риска: "8.5 → 7.7 → 6.2..." -->
+                <Transition name="score-pop">
+                <div
+                  v-if="result?.summary || result?.overall_risk_level"
+                  class="bg-panel border border-rim rounded-xl p-5 flex flex-col gap-3 items-center text-center"
+                >
                   <span class="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
                     Общая оценка
                   </span>
@@ -260,7 +282,7 @@
                     class="px-2.5 py-1 rounded-full text-[11px] font-semibold flex items-center gap-1.5"
                     :class="overallChipClass"
                   >
-                    <svg v-if="result.overall_risk_level !== 'none'" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <svg v-if="result?.overall_risk_level !== 'none'" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                       <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
                       <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
                     </svg>
@@ -269,10 +291,11 @@
                     </svg>
                     {{ overallLabel }}
                   </div>
-                  <p v-if="result.summary" class="text-[12px] leading-[1.55] text-ink-muted">
+                  <p v-if="result?.summary" class="text-[12px] leading-[1.55] text-ink-muted">
                     {{ result.summary }}
                   </p>
                 </div>
+                </Transition>
 
                 <!-- Sources -->
                 <div v-if="citations.length" class="bg-panel border border-rim rounded-xl p-4 flex flex-col gap-3">
@@ -325,66 +348,6 @@
     </div>
 
     <!-- Bottom bar — re-analyze / new material -->
-    <Transition name="bar-slide">
-      <div v-if="hasStarted" class="flex-shrink-0 border-t border-rim bg-canvas">
-        <div class="px-6 pb-4 pt-3 max-w-[840px] mx-auto w-full">
-          <Transition name="chip-slide">
-            <div v-if="barFile" class="mb-2 flex items-center gap-1.5">
-              <div class="flex items-center gap-1.5 px-2.5 py-1 bg-panel border border-rim rounded-full text-xs text-ink-muted">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-ok flex-shrink-0">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-                </svg>
-                <span class="truncate max-w-[200px]">{{ barFile.name }}</span>
-                <button class="ml-0.5 text-ink-faint hover:text-danger transition-colors cursor-pointer" @click="barFile = null">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </Transition>
-
-          <div class="bar-wrap flex items-center gap-2 px-3 py-2.5 bg-field border border-rim rounded-2xl transition-colors">
-            <button
-              class="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-xl text-ink-faint hover:text-ink hover:bg-dimmed transition-colors cursor-pointer"
-              title="Прикрепить файл"
-              :disabled="analyzing"
-              @click="barFileInput?.click()"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-              </svg>
-            </button>
-            <input ref="barFileInput" type="file" accept=".pdf,.docx,.txt" class="hidden" @change="onBarFileChange" />
-
-            <textarea
-              ref="barTextareaRef"
-              v-model="barText"
-              class="flex-1 bg-transparent text-ink text-base leading-relaxed resize-none outline-none max-h-[140px] placeholder-ink-faint"
-              placeholder="Новый материал для анализа..."
-              rows="1"
-              :disabled="analyzing"
-              @keydown.enter.exact.prevent="runBarAnalysis"
-              @input="autoResizeBar"
-            />
-
-            <button
-              class="flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-xl bg-brand text-white cursor-pointer transition-all hover:bg-brand-lit disabled:opacity-40 disabled:cursor-not-allowed"
-              :disabled="!canBarSubmit"
-              @click="runBarAnalysis"
-            >
-              <svg v-if="analyzing" class="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <circle cx="12" cy="12" r="10" stroke-dasharray="31.4" stroke-dashoffset="10"/>
-              </svg>
-              <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
-              </svg>
-            </button>
-          </div>
-        </div>
-      </div>
-    </Transition>
-
   </div>
 </template>
 
@@ -473,13 +436,6 @@ function onMaterialClick(e: MouseEvent) {
 const canSubmit = computed(() => !analyzing.value && (inputText.value.trim() || uploadFile.value))
 const hasStarted = computed(() => analyzing.value || !!result.value || !!error.value)
 
-const barText = ref('')
-const barFile = ref<File | null>(null)
-const barFileInput = ref<HTMLInputElement>()
-const barTextareaRef = ref<HTMLTextAreaElement | null>(null)
-
-const canBarSubmit = computed(() => !analyzing.value && (barText.value.trim() || barFile.value))
-
 const MAX_FILE_BYTES = 10 * 1024 * 1024  // 10 МБ — должно совпадать с rag/MAX_UPLOAD_BYTES
 const MAX_FILE_MB = MAX_FILE_BYTES / (1024 * 1024)
 
@@ -511,35 +467,11 @@ async function runAnalysis() {
   await analyze(inputText.value || null, uploadFile.value, 10)
 }
 
-function onBarFileChange(e: Event) {
-  const target = e.target as HTMLInputElement
-  const f = target.files?.[0]
-  if (f && validateFileSize(f)) barFile.value = f
-  if (target) target.value = ''
-}
-
-async function runBarAnalysis() {
-  if (!canBarSubmit.value) return
-  const text = barText.value
-  const file = barFile.value
-  barText.value = ''
-  barFile.value = null
-  severityFilter.value = null
-  reset()
-  await nextTick()
-  inputText.value = text
-  uploadFile.value = file
-  localText.value = text || (file ? `[Файл: ${file.name}]` : '')
-  await analyze(text || null, file, 10)
-}
-
 function startOver() {
   reset()
   inputText.value = ''
   uploadFile.value = null
   localText.value = ''
-  barText.value = ''
-  barFile.value = null
   severityFilter.value = null
   currentAnalysisId.value = null
 }
@@ -557,13 +489,6 @@ watch(savedId, (id) => {
 onBeforeUnmount(() => {
   if (analyzing.value) abort()
 })
-
-function autoResizeBar() {
-  const el = barTextareaRef.value
-  if (!el) return
-  el.style.height = 'auto'
-  el.style.height = Math.min(el.scrollHeight, 140) + 'px'
-}
 
 // ─── Risk counts / filtering ──────────────────────────────────
 const riskCounts = computed(() => {
@@ -803,18 +728,6 @@ function splitBySentences(text: string, target = 280): string[] {
 .card-collapse-enter-from,
 .card-collapse-leave-to      { opacity: 0; transform: translateY(-8px); }
 
-.bar-slide-enter-active { transition: opacity 0.2s ease, transform 0.2s ease; }
-.bar-slide-leave-active { transition: opacity 0.15s ease, transform 0.15s ease; }
-.bar-slide-enter-from,
-.bar-slide-leave-to     { opacity: 0; transform: translateY(12px); }
-
-.chip-slide-enter-active { transition: opacity 0.15s ease, transform 0.15s ease; }
-.chip-slide-leave-active { transition: opacity 0.1s ease, transform 0.1s ease; }
-.chip-slide-enter-from,
-.chip-slide-leave-to     { opacity: 0; transform: translateY(4px); }
-
-.bar-wrap:focus-within { border-color: var(--accent); }
-
 .progress-track { background: transparent; transition: opacity 0.4s ease; }
 .progress-bar {
   width: 40%;
@@ -958,6 +871,26 @@ function splitBySentences(text: string, target = 280): string[] {
   margin-bottom: 0 !important;
   padding-top: 0;
   padding-bottom: 0;
+}
+
+/* ─── Material card entrance (по приходу ad_text event) ─── */
+.material-fade-enter-active {
+  transition: opacity 280ms var(--ease-out), transform 280ms var(--ease-out);
+}
+.material-fade-enter-from {
+  opacity: 0;
+  transform: scale(0.99) translateY(4px);
+}
+
+/* ─── Score card pop при окончании streaming.
+   Только opacity + лёгкий translateY, без scale — scale на 320px-блоке давал
+   ощутимое "моргание" при появлении одновременно с aside. */
+.score-pop-enter-active {
+  transition: opacity 260ms var(--ease-out), transform 260ms var(--ease-out);
+}
+.score-pop-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
 }
 
 /* ─── Print: hide chrome, expand content ─────────────────────── */

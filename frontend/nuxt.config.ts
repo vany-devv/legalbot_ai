@@ -26,6 +26,9 @@ export default defineNuxtConfig({
     plugins: 'plugins',
   },
   app: {
+    // Глобальные page/layout transitions — стили определены в app.vue.
+    pageTransition: { name: 'page-fade', mode: 'out-in' },
+    layoutTransition: { name: 'layout-fade', mode: 'out-in' },
     head: {
       title: 'LegalBot AI',
       titleTemplate: '%s — LegalBot AI',
