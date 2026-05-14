@@ -1,5 +1,7 @@
 import { ref, readonly, nextTick } from 'vue'
 
+export type SidebarMode = 'chat' | 'analyze'
+
 // Sync read before first render — prevents layout shift on load
 const sidebarOpen = ref(
   typeof window !== 'undefined'
@@ -7,6 +9,14 @@ const sidebarOpen = ref(
     : true
 )
 const sidebarReady = ref(false)
+
+// Последний активный режим сайдбара (chat / analyze). Sticky context для
+// settings / subscription / admin — чтобы юзер не терял ориентир.
+const lastMode = ref<SidebarMode>(
+  typeof window !== 'undefined'
+    ? ((localStorage.getItem('lb-sidebar-mode') as SidebarMode | null) || 'chat')
+    : 'chat'
+)
 
 export function useSidebar() {
   function init() {
@@ -19,5 +29,18 @@ export function useSidebar() {
     localStorage.setItem('lb-sidebar', sidebarOpen.value ? 'open' : 'closed')
   }
 
-  return { sidebarOpen: readonly(sidebarOpen), sidebarReady: readonly(sidebarReady), toggle, init }
+  function setLastMode(m: SidebarMode) {
+    if (lastMode.value === m) return
+    lastMode.value = m
+    localStorage.setItem('lb-sidebar-mode', m)
+  }
+
+  return {
+    sidebarOpen: readonly(sidebarOpen),
+    sidebarReady: readonly(sidebarReady),
+    lastMode: readonly(lastMode),
+    toggle,
+    init,
+    setLastMode,
+  }
 }

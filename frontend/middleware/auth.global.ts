@@ -12,4 +12,10 @@ export default defineNuxtRouteMiddleware(async (to) => {
   if (auth.isLoggedIn.value && isPublicAuthRoute) {
     return navigateTo(auth.resolvePostAuthRedirect(to.query.next), { replace: true })
   }
+
+  // Корень "/" — это не самостоятельный раздел, чат живёт на /chat.
+  // Редирект делаем тут, чтобы избежать промежуточной пустой страницы.
+  if (to.path === '/') {
+    return navigateTo('/chat', { replace: true })
+  }
 })

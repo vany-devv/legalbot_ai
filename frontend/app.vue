@@ -2,7 +2,7 @@
   <!-- Показываем shell только после auth.init() — иначе мелькает login,
        пока async middleware ещё ждёт ответа от /auth/me. -->
   <div v-if="initialized" class="app-shell">
-    <ChatSidebar v-if="showSidebar" />
+    <AppSidebar v-if="showSidebar" />
     <main class="main-area">
       <NuxtPage />
     </main>

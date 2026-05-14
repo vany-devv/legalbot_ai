@@ -11,6 +11,14 @@ const loading = ref(false)
 const initialized = ref(false)
 let initPromise: Promise<void> | null = null
 
+// Глобальный "tick" для сброса состояния других composables на logout/401.
+// useAuth не импортит useChat/useAnalyze/useAnalysisHistory (избегаем циклов) —
+// вместо этого они подписываются через watch(authResetTick, () => reset()).
+const authResetTick = ref(0)
+export function useAuthResetSignal() {
+  return authResetTick
+}
+
 function normalizeInternalPath(candidate: unknown): string | null {
   if (typeof candidate !== 'string' || !candidate.startsWith('/') || candidate.startsWith('//')) {
     return null
@@ -41,6 +49,8 @@ export function useAuth() {
 
   function clearAuthState() {
     user.value = null
+    // Триггерим сброс других composables (useChat, useAnalyze, useAnalysisHistory).
+    authResetTick.value++
   }
 
   async function init() {
@@ -169,7 +179,7 @@ export function useAuth() {
 
   function resolvePostAuthRedirect(nextPath?: unknown) {
     const safeNext = normalizeInternalPath(nextPath)
-    if (!safeNext || isAuthRoute(safeNext)) return '/'
+    if (!safeNext || isAuthRoute(safeNext)) return '/chat'
     return safeNext
   }
 

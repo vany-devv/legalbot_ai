@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     yandex_folder_id: str = ""
     yandex_api_key: str = ""
 
+    # Experiment H1: feature flag для recovery-механизма поверх json.loads.
+    # При false остаётся только стандартный json.loads без bracket_slice/regex/retry.
+    analyze_recovery_enabled: bool = True
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 

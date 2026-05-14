@@ -114,9 +114,9 @@
         </h2>
         <template v-if="isLoggedIn">
           <div class="flex items-center justify-between gap-4 py-3">
-            <div>
+            <div class="min-w-0 flex-1">
               <p class="text-[15px] font-medium text-ink">Email</p>
-              <p class="text-sm text-ink-muted">{{ user?.email }}</p>
+              <p class="text-sm text-ink-muted break-all">{{ user?.email }}</p>
             </div>
           </div>
 

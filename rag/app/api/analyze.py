@@ -3,12 +3,14 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 
 from app.api.ingest import _extract_text
 from app.api.schemas import AnalyzeResponse, CitationResponse
+from app.config import settings
 from app.core.retrieval import HybridRetriever, SearchResult
 from app.dependencies import get_llm, get_retriever, get_vector_repo
 from app.llm.base import LLMProvider
@@ -324,12 +326,16 @@ def _parse_law_reference(ref: str) -> tuple[str, str] | None:
 
     Принимает форматы: "ч. 3 ст. 5 ФЗ-38", "п. 2 ст. 51 ФЗ-156",
     "ст. 28.1 ФЗ-38", "ст. 5 38-ФЗ" и т.п. Возвращает None если не парсится.
+
+    Важно: форма `NN-ФЗ` требует именно дефис (без пробела). Иначе паттерн
+    жадно ловит номер статьи из строк вида "ст. 28 ФЗ-38" → law="28" вместо 38.
     """
     if not ref:
         return None
     # Ищем номер статьи и номер закона.
     article_m = re.search(r"ст\.?\s*(\d+(?:[.\-]\d+)?)", ref, re.IGNORECASE)
-    law_m = re.search(r"ФЗ[-\s]*(\d+)|(\d+)[-\s]*ФЗ", ref, re.IGNORECASE)
+    # ФЗ-38 / ФЗ 38 / ФЗ№38 — каноничная форма. 38-ФЗ — допустимая, но только с дефисом.
+    law_m = re.search(r"ФЗ[-\s№]*(\d+)|(\d+)-ФЗ", ref, re.IGNORECASE)
     if not article_m or not law_m:
         return None
     article = re.sub(r"[^\d]", "", article_m.group(1))
@@ -488,6 +494,10 @@ async def analyze_stream(
         ad_text = ad_text[:MAX_AD_TEXT_LEN]
 
     async def generate():
+        # Таймер для эксперимента H3: middleware обрезает время на возврате
+        # Response, не на закрытии стрима, поэтому замеряем явно внутри generate.
+        _t0 = time.perf_counter()
+
         def _event(payload: dict) -> str:
             return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
@@ -549,6 +559,9 @@ async def analyze_stream(
         citations_data = [c.model_dump() for c in _build_all_citations(full_mandatory, supplementary, risks)]
         yield _event({"type": "citations", "data": citations_data})
         yield "data: [DONE]\n\n"
+
+        total_ms = int((time.perf_counter() - _t0) * 1000)
+        logger.info("analyze_total_ms", extra={"total_ms": total_ms})
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 
@@ -669,6 +682,13 @@ def _parse_json(raw: str) -> dict:
     Если стандартный парсинг упал (GigaChat изредка эмитит лишний `\\"`
     посреди string-полей), пробуем восстановить структуру вручную через
     `_recover_analysis()` — анализ модели уже сделан, незачем ретраить.
+
+    Recovery-ветви (bracket_slice + regex-recovery) обёрнуты под флаг
+    settings.analyze_recovery_enabled (см. config). При false остаётся
+    только стандартный json.loads — это baseline для эксперимента H1.
+    Каждый исход парсинга логируется как `parse_event` с полем
+    parse_path ∈ {json_loads_ok, bracket_slice_ok, regex_recovery_ok,
+    total_failure}.
     """
     text = raw.strip()
     if text.startswith("```"):
@@ -679,23 +699,38 @@ def _parse_json(raw: str) -> dict:
         text = text.strip()
 
     try:
-        return json.loads(text)
+        result = json.loads(text)
+        logger.info("parse_event", extra={"parse_path": "json_loads_ok"})
+        return result
     except json.JSONDecodeError:
-        start = text.find("{")
-        end = text.rfind("}")
-        if start != -1 and end != -1 and end > start:
-            try:
-                return json.loads(text[start:end + 1])
-            except json.JSONDecodeError:
-                pass
+        pass
 
-    # Стандартный парсинг сдох — пробуем спасти то что есть.
+    if not settings.analyze_recovery_enabled:
+        logger.info("parse_event", extra={"parse_path": "total_failure"})
+        return {}
+
+    # Recovery шаг 1: попытка извлечь содержимое между первой и последней
+    # фигурной скобкой. Помогает, когда модель добавила лишние комментарии
+    # до или после json.
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        try:
+            result = json.loads(text[start:end + 1])
+            logger.info("parse_event", extra={"parse_path": "bracket_slice_ok"})
+            return result
+        except json.JSONDecodeError:
+            pass
+
+    # Recovery шаг 2: regex-парсер по структуре риска. Толерантен к
+    # лишним `\"` внутри строковых значений.
     recovered = _recover_analysis(text)
     if recovered:
         logger.warning(
             "[PARSE] standard JSON failed, recovered %d risks from malformed output",
             len(recovered.get("risks", [])),
         )
+        logger.info("parse_event", extra={"parse_path": "regex_recovery_ok"})
         return recovered
 
     logger.warning(
@@ -704,6 +739,7 @@ def _parse_json(raw: str) -> dict:
         raw[:200],
         raw[-200:],
     )
+    logger.info("parse_event", extra={"parse_path": "total_failure"})
     return {}
 
 
@@ -785,16 +821,24 @@ async def _analyze_stage2(
       2) если risks пуст — ретрай. Это покрывает редкий случай когда
          модель вернула не-JSON или совершенно битую структуру где даже
          regex-recovery не нашёл ни одного `"fragment":`.
+
+    Retry также обёрнут под settings.analyze_recovery_enabled — это нужно,
+    чтобы baseline-режим эксперимента H1 был чистым (только json.loads,
+    без любых дополнительных слоёв защиты).
     """
     raw = await llm.complete(system=system, user=user)
     parsed = _parse_json(raw)
     if parsed.get("risks"):
+        return parsed, raw
+    if not settings.analyze_recovery_enabled:
+        # Baseline-режим: ретрай отключён, возвращаем то, что получили.
         return parsed, raw
     logger.warning("[ANALYZE] empty risks after parse+recovery, retrying once")
     raw2 = await llm.complete(system=system, user=user)
     parsed2 = _parse_json(raw2)
     if parsed2.get("risks"):
         logger.info("[ANALYZE] retry succeeded with %d risks", len(parsed2["risks"]))
+        logger.info("parse_event", extra={"parse_path": "retry_ok"})
         return parsed2, raw2
     # Возвращаем что есть (возможно пустое) — клиент увидит {} и поймёт что не сработало.
     return parsed or parsed2, raw2 if parsed2 else raw

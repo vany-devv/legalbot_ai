@@ -82,9 +82,6 @@ const categories = [
   },
 ]
 
-const codexCount = 12
-const statuteCount = 8
-
 onMounted(() => newChat())
 
 // Scroll only when near bottom (prevent jerking during streaming when user scrolled up)

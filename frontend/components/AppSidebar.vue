@@ -3,7 +3,8 @@
     class="flex flex-col h-screen bg-sidebar border-r border-rim flex-shrink-0 overflow-hidden"
     :class="[sidebarOpen ? 'w-[260px]' : 'w-[52px]', sidebarReady ? 'transition-[width] duration-250 ease-in-out' : '']"
   >
-    <div class="px-2 pt-2 pb-2 flex-shrink-0 space-y-0.5">
+    <!-- ─── Header (logo + collapse) ──────────────────────── -->
+    <div class="px-2 pt-2 pb-2 flex-shrink-0">
       <div
         class="flex items-center h-9 px-[10px] rounded-lg overflow-hidden transition-colors"
         :class="!sidebarOpen ? 'cursor-pointer text-ink-faint hover:text-ink hover:bg-dimmed' : 'text-ink'"
@@ -48,97 +49,152 @@
           </svg>
         </button>
       </div>
-
-      <button class="sidebar-nav-item w-full mt-1" title="Новый чат" @click="handleNewChat">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-          stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0">
-          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-        </svg>
-        <span class="sidebar-label" :class="sidebarOpen ? 'label-show' : 'label-hide'">Новый чат</span>
-      </button>
     </div>
 
-    <div
-      class="flex-1 overflow-y-auto px-2 py-1 transition-opacity duration-150"
-      :class="sidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'"
-    >
-      <!-- ─── Чаты ─────────────────────────────────────── -->
-      <div class="sidebar-section-label">Диалоги</div>
-      <div v-if="!conversations.length" class="sidebar-nav-item cursor-default opacity-60 pointer-events-none">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0 opacity-60">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-        </svg>
-        <span class="sidebar-label text-ink-faint text-xs" :class="sidebarOpen ? 'label-show' : 'label-hide'">Нет диалогов</span>
-      </div>
-      <div
-        v-for="conv in conversations"
-        :key="conv.id"
-        class="relative flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer text-sm transition-all duration-150 mb-0.5 overflow-hidden"
-        :class="conv.id === currentConversationId
-          ? 'bg-brand-dim text-ink'
-          : 'text-ink-muted hover:bg-panel hover:text-ink'"
-        @click="handleOpen(conv.id)"
-      >
-        <span
-          v-if="conv.id === currentConversationId"
-          class="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-brand rounded-r-full"
-        />
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0 opacity-50">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-        </svg>
-        <span class="truncate">{{ conv.title }}</span>
+    <!-- ─── Tab switcher (Чат / Анализ) ───────────────────── -->
+    <div class="px-2 pb-2 flex-shrink-0">
+      <!-- Open: flat two-button row, такой же высоты как "Новый <чат|анализ>" -->
+      <div v-if="sidebarOpen" class="flex items-center gap-1" role="tablist">
+        <button
+          class="sidebar-nav-item flex-1 justify-start"
+          :class="currentMode === 'chat' ? 'sidebar-nav-active' : ''"
+          role="tab"
+          :aria-selected="currentMode === 'chat'"
+          @click="switchTo('chat')"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+          <span>Чат</span>
+        </button>
+        <button
+          class="sidebar-nav-item flex-1 justify-start"
+          :class="currentMode === 'analyze' ? 'sidebar-nav-active' : ''"
+          role="tab"
+          :aria-selected="currentMode === 'analyze'"
+          @click="switchTo('analyze')"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+          <span>Анализ</span>
+        </button>
       </div>
 
-      <!-- ─── Анализы ──────────────────────────────────── -->
-      <div class="sidebar-section-label mt-3">Анализы рекламы</div>
-      <div v-if="!analyses.length" class="sidebar-nav-item cursor-default opacity-60 pointer-events-none">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0 opacity-60">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-        </svg>
-        <span class="sidebar-label text-ink-faint text-xs" :class="sidebarOpen ? 'label-show' : 'label-hide'">Нет анализов</span>
-      </div>
-      <div
-        v-for="a in analyses"
-        :key="a.id"
-        class="group relative flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer text-sm transition-all duration-150 mb-0.5 overflow-hidden"
-        :class="a.id === currentAnalysisId
-          ? 'bg-brand-dim text-ink'
-          : 'text-ink-muted hover:bg-panel hover:text-ink'"
-        @click="handleOpenAnalysis(a.id)"
-      >
-        <span
-          v-if="a.id === currentAnalysisId"
-          class="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-brand rounded-r-full"
-        />
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0 opacity-50">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-        </svg>
-        <span class="truncate flex-1">{{ a.title }}</span>
+      <!-- Collapsed: vertical icon-only buttons -->
+      <div v-else class="flex flex-col gap-0.5">
         <button
-          class="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded text-ink-faint hover:text-danger opacity-0 group-hover:opacity-100 transition-opacity"
-          title="Удалить"
-          @click.stop="confirmDeleteAnalysis(a.id)"
+          class="sidebar-nav-item w-full justify-center"
+          :class="currentMode === 'chat' ? 'sidebar-nav-active' : ''"
+          title="Чат"
+          @click="switchTo('chat')"
         >
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+        </button>
+        <button
+          class="sidebar-nav-item w-full justify-center"
+          :class="currentMode === 'analyze' ? 'sidebar-nav-active' : ''"
+          title="Анализ"
+          @click="switchTo('analyze')"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
           </svg>
         </button>
       </div>
     </div>
 
+    <!-- ─── Primary action: Новый <чат|анализ> ────────────── -->
+    <div class="px-2 pb-2 flex-shrink-0">
+      <button class="sidebar-nav-item w-full" :title="primaryLabel" @click="handleNewItem">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        <span class="sidebar-label" :class="sidebarOpen ? 'label-show' : 'label-hide'">{{ primaryLabel }}</span>
+      </button>
+    </div>
+
+    <!-- ─── Contextual list (chat OR analyses) ────────────── -->
+    <div
+      class="flex-1 overflow-y-auto px-2 py-1 transition-opacity duration-150"
+      :class="sidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'"
+    >
+      <!-- Чаты -->
+      <template v-if="currentMode === 'chat'">
+        <div v-if="!conversations.length" class="sidebar-nav-item cursor-default opacity-60 pointer-events-none">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0 opacity-60">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+          <span class="sidebar-label text-ink-faint text-xs" :class="sidebarOpen ? 'label-show' : 'label-hide'">Нет диалогов</span>
+        </div>
+        <div
+          v-for="conv in conversations"
+          :key="conv.id"
+          class="relative flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer text-sm transition-all duration-150 mb-0.5 overflow-hidden"
+          :class="conv.id === currentConversationId
+            ? 'bg-brand-dim text-ink'
+            : 'text-ink-muted hover:bg-panel hover:text-ink'"
+          @click="handleOpenChat(conv.id)"
+        >
+          <span
+            v-if="conv.id === currentConversationId"
+            class="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-brand rounded-r-full"
+          />
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0 opacity-50">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+          <span class="truncate">{{ conv.title }}</span>
+        </div>
+      </template>
+
+      <!-- Анализы -->
+      <template v-else>
+        <div v-if="!analyses.length" class="sidebar-nav-item cursor-default opacity-60 pointer-events-none">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0 opacity-60">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+          <span class="sidebar-label text-ink-faint text-xs" :class="sidebarOpen ? 'label-show' : 'label-hide'">Нет анализов</span>
+        </div>
+        <div
+          v-for="a in analyses"
+          :key="a.id"
+          class="group relative flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer text-sm transition-all duration-150 mb-0.5 overflow-hidden"
+          :class="a.id === currentAnalysisId
+            ? 'bg-brand-dim text-ink'
+            : 'text-ink-muted hover:bg-panel hover:text-ink'"
+          @click="handleOpenAnalysis(a.id)"
+        >
+          <span
+            v-if="a.id === currentAnalysisId"
+            class="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-brand rounded-r-full"
+          />
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0 opacity-50">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+          <span class="truncate flex-1">{{ a.title }}</span>
+          <button
+            class="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded text-ink-faint hover:text-danger opacity-0 group-hover:opacity-100 transition-opacity"
+            title="Удалить"
+            @click.stop="confirmDeleteAnalysis(a.id)"
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+      </template>
+    </div>
+
+    <!-- ─── Secondary nav + user ──────────────────────────── -->
     <div class="px-2 pb-3 pt-2 border-t border-rim space-y-0.5 flex-shrink-0">
       <NuxtLink v-if="isAdmin" to="/admin" class="sidebar-nav-item" active-class="sidebar-nav-active">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
         </svg>
         <span class="sidebar-label" :class="sidebarOpen ? 'label-show' : 'label-hide'">База знаний</span>
-      </NuxtLink>
-
-      <NuxtLink to="/analyze" class="sidebar-nav-item" active-class="sidebar-nav-active" :class="route.path.startsWith('/analyze') ? 'sidebar-nav-active' : ''">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-        </svg>
-        <span class="sidebar-label" :class="sidebarOpen ? 'label-show' : 'label-hide'">Анализ рекламы</span>
       </NuxtLink>
 
       <NuxtLink to="/settings" class="sidebar-nav-item" active-class="sidebar-nav-active">
@@ -201,10 +257,13 @@
 </template>
 
 <script setup lang="ts">
+import type { SidebarMode } from '~/composables/useSidebar'
+
 const { conversations, currentConversationId, newChat, loadConversations } = useChat()
 const { items: analyses, currentId: currentAnalysisId, loadList: loadAnalyses, remove: removeAnalysis } = useAnalysisHistory()
 const { user, isLoggedIn, isAdmin, logout } = useAuth()
-const { sidebarOpen, sidebarReady, toggle } = useSidebar()
+const { sidebarOpen, sidebarReady, lastMode, toggle, setLastMode } = useSidebar()
+const { reset: resetAnalyze } = useAnalyze()
 const { theme, toggle: toggleTheme } = useTheme()
 const router = useRouter()
 const route = useRoute()
@@ -214,15 +273,47 @@ onMounted(async () => {
 })
 
 watch(isLoggedIn, async (next) => {
-  if (next) await loadAnalyses()
+  if (next) {
+    await Promise.all([loadConversations(), loadAnalyses()])
+  }
 })
 
-function handleNewChat() {
-  newChat()
-  router.push('/')
+// Mode определяется по route. На "вторичных" страницах (settings/subscription/admin)
+// показываем последний явно выбранный mode через sticky lastMode из localStorage.
+const currentMode = computed<SidebarMode>(() => {
+  if (route.path.startsWith('/analyze')) return 'analyze'
+  if (route.path.startsWith('/chat')) return 'chat'
+  return lastMode.value
+})
+
+// Обновляем lastMode только когда юзер реально находится на chat- или analyze-странице.
+// На settings/subscription/admin sticky mode остаётся прежним.
+watch(currentMode, (m) => {
+  const onPrimaryPage = route.path.startsWith('/chat') || route.path.startsWith('/analyze')
+  if (onPrimaryPage) setLastMode(m)
+}, { immediate: true })
+
+const primaryLabel = computed(() => currentMode.value === 'chat' ? 'Новый чат' : 'Новый анализ')
+
+function switchTo(m: SidebarMode) {
+  const target = m === 'chat' ? '/chat' : '/analyze'
+  // Если уже точно на корне нужного режима — ничего не делаем.
+  // А клик "Чат" находясь на /chat/:id ДОЛЖЕН вернуть на /chat (welcome).
+  if (route.path === target) return
+  router.push(target)
 }
 
-function handleOpen(id: string) {
+function handleNewItem() {
+  if (currentMode.value === 'chat') {
+    newChat()
+    if (route.path !== '/chat') router.push('/chat')
+  } else {
+    resetAnalyze()
+    if (route.path !== '/analyze') router.push('/analyze')
+  }
+}
+
+function handleOpenChat(id: string) {
   router.push(`/chat/${id}`)
 }
 

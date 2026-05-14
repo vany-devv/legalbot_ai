@@ -42,8 +42,11 @@ export function useAnalysisHistory() {
         credentials: 'include',
       })
       items.value = res || []
-    } catch (e) {
-      console.warn('Failed to load analysis history:', e)
+    } catch (e: any) {
+      // 401 — useAuth уже разлогинит; не показываем тост (это редирект, не баг).
+      if (e?.status !== 401 && e?.statusCode !== 401) {
+        useToast().show('Не удалось загрузить историю анализов', 'error', 4000)
+      }
       items.value = []
     } finally {
       loading.value = false
@@ -57,6 +60,7 @@ export function useAnalysisHistory() {
         credentials: 'include',
       })
     } catch (e) {
+      // Молчаливый null — на странице есть UI-fallback `notFound`.
       console.warn('Failed to load analysis:', e)
       return null
     }
@@ -71,10 +75,21 @@ export function useAnalysisHistory() {
       })
       items.value = items.value.filter(it => it.id !== id)
       if (currentId.value === id) currentId.value = null
-    } catch (e) {
-      console.warn('Failed to delete analysis:', e)
+    } catch (e: any) {
+      if (e?.status !== 401 && e?.statusCode !== 401) {
+        useToast().show('Не удалось удалить анализ', 'error', 4000)
+      }
     }
   }
+
+  function reset() {
+    items.value = []
+    currentId.value = null
+    loading.value = false
+  }
+
+  const authResetTick = useAuthResetSignal()
+  watch(authResetTick, () => reset())
 
   // Локально добавить новую запись в начало списка (вызывается из useAnalyze
   // при получении SSE-события `saved` — без нового запроса к серверу).
@@ -90,5 +105,6 @@ export function useAnalysisHistory() {
     loadOne,
     remove,
     prepend,
+    reset,
   }
 }
