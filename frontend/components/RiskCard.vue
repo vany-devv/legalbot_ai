@@ -19,7 +19,10 @@
       >
         {{ riskLabel }}
       </span>
-      <span class="text-[13px] text-ink-muted flex-1 truncate font-medium">
+      <span
+        class="text-[13px] text-ink-muted flex-1 truncate font-medium"
+        :title="risk.law_reference"
+      >
         {{ risk.law_reference }}
       </span>
       <button

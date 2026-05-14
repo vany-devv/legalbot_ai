@@ -391,7 +391,7 @@
 <script setup lang="ts">
 useHead({ title: 'Анализ рекламы' })
 
-const { thinking, citations, result, analyzing, error, materialText, materialTitle, savedId, analyze, reset } = useAnalyze()
+const { thinking, citations, result, analyzing, error, materialText, materialTitle, savedId, analyze, reset, abort } = useAnalyze()
 const { currentId: currentAnalysisId } = useAnalysisHistory()
 const route = useRoute()
 const router = useRouter()
@@ -403,6 +403,14 @@ const dragging = ref(false)
 
 const localText = ref('')
 const analyzedText = computed(() => materialText.value || localText.value)
+
+// Сбрасываем state на входе на эту страницу — иначе модульное состояние
+// useAnalyze, заполненное на /analyze/:id через loadSaved(), просочится сюда
+// и юзер увидит результат прошлого анализа вместо чистой формы.
+onMounted(() => {
+  reset()
+  currentAnalysisId.value = null
+})
 
 const sidebarOpen = ref(true)
 const severityFilter = ref<'high' | 'medium' | 'low' | null>(null)
@@ -542,6 +550,12 @@ watch(savedId, (id) => {
     currentAnalysisId.value = id
     router.replace(`/analyze/${id}`)
   }
+})
+
+// Отменяем активный стрим при уходе со страницы — иначе он продолжит писать
+// в модульный state и вылезет при возврате.
+onBeforeUnmount(() => {
+  if (analyzing.value) abort()
 })
 
 function autoResizeBar() {

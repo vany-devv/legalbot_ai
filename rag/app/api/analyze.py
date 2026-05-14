@@ -326,12 +326,16 @@ def _parse_law_reference(ref: str) -> tuple[str, str] | None:
 
     Принимает форматы: "ч. 3 ст. 5 ФЗ-38", "п. 2 ст. 51 ФЗ-156",
     "ст. 28.1 ФЗ-38", "ст. 5 38-ФЗ" и т.п. Возвращает None если не парсится.
+
+    Важно: форма `NN-ФЗ` требует именно дефис (без пробела). Иначе паттерн
+    жадно ловит номер статьи из строк вида "ст. 28 ФЗ-38" → law="28" вместо 38.
     """
     if not ref:
         return None
     # Ищем номер статьи и номер закона.
     article_m = re.search(r"ст\.?\s*(\d+(?:[.\-]\d+)?)", ref, re.IGNORECASE)
-    law_m = re.search(r"ФЗ[-\s]*(\d+)|(\d+)[-\s]*ФЗ", ref, re.IGNORECASE)
+    # ФЗ-38 / ФЗ 38 / ФЗ№38 — каноничная форма. 38-ФЗ — допустимая, но только с дефисом.
+    law_m = re.search(r"ФЗ[-\s№]*(\d+)|(\d+)-ФЗ", ref, re.IGNORECASE)
     if not article_m or not law_m:
         return None
     article = re.sub(r"[^\d]", "", article_m.group(1))

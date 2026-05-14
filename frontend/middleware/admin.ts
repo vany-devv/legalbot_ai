@@ -6,6 +6,6 @@ export default defineNuxtRouteMiddleware(async (to) => {
     return navigateTo(auth.buildLoginRedirect(to.fullPath), { replace: true })
   }
   if (!auth.isAdmin.value) {
-    return navigateTo('/')
+    return navigateTo('/chat')
   }
 })

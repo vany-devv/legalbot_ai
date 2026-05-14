@@ -37,15 +37,37 @@ const currentConversationId = ref<string | null>(null)
 const messages = ref<ChatMessage[]>([])
 const sending = ref(false)
 
+// Текущий AbortController стрима — отменяем при unmount / новом запросе / logout.
+let currentController: AbortController | null = null
+
 export function useChat() {
   const config = useRuntimeConfig()
   const api = config.public.apiBase
   const { isLoggedIn, clearAuthState } = useAuth()
 
   function newChat() {
+    currentController?.abort()
+    currentController = null
     currentConversationId.value = null
     messages.value = []
   }
+
+  // Полный сброс состояния (на logout / 401).
+  function reset() {
+    currentController?.abort()
+    currentController = null
+    conversations.value = []
+    currentConversationId.value = null
+    messages.value = []
+    sending.value = false
+  }
+
+  function abort() {
+    currentController?.abort()
+  }
+
+  const authResetTick = useAuthResetSignal()
+  watch(authResetTick, () => reset())
 
   function openConversation(id: string) {
     currentConversationId.value = id
@@ -101,6 +123,10 @@ export function useChat() {
     messages.value.push({ id: uid(), role: 'assistant', content: '', isStreaming: true, thinking: [], createdAt: new Date() })
     const msgIndex = messages.value.length - 1
 
+    const controller = new AbortController()
+    currentController?.abort()
+    currentController = controller
+
     try {
       const body: Record<string, any> = { query, top_k: topK }
       if (currentConversationId.value) body.conversation_id = currentConversationId.value
@@ -110,6 +136,7 @@ export function useChat() {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify(body),
+        signal: controller.signal,
       })
 
       if (response.status === 402) {
@@ -172,12 +199,19 @@ export function useChat() {
         }
       }
     } catch (e: any) {
-      const msg = messages.value[msgIndex]
-      if (msg) { msg.content = `Ошибка: ${e?.message || 'не удалось получить ответ'}`; msg.isStreaming = false }
+      // Abort — явная отмена (unmount/logout/новый запрос), не показываем как ошибку юзеру.
+      if (e?.name === 'AbortError') {
+        const msg = messages.value[msgIndex]
+        if (msg) msg.isStreaming = false
+      } else {
+        const msg = messages.value[msgIndex]
+        if (msg) { msg.content = `Ошибка: ${e?.message || 'не удалось получить ответ'}`; msg.isStreaming = false }
+      }
     } finally {
       const msg = messages.value[msgIndex]
       if (msg?.isStreaming) msg.isStreaming = false
       sending.value = false
+      if (currentController === controller) currentController = null
       useBilling().refresh()
     }
   }
@@ -188,6 +222,8 @@ export function useChat() {
     messages: readonly(messages),
     sending: readonly(sending),
     newChat,
+    reset,
+    abort,
     openConversation,
     send,
     loadConversations,

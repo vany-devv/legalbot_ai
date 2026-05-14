@@ -23,6 +23,9 @@ const materialText = ref<string>('')
 const materialTitle = ref<string>('')  // имя файла без расширения, либо title из истории
 const savedId = ref<string | null>(null)
 
+// Текущий AbortController стрима — для отмены при unmount / новом запросе / logout.
+let currentController: AbortController | null = null
+
 function stripExtension(name: string): string {
   const dot = name.lastIndexOf('.')
   return dot > 0 ? name.slice(0, dot) : name
@@ -34,6 +37,9 @@ export function useAnalyze() {
   const { clearAuthState } = useAuth()
 
   function reset() {
+    // Отменяем текущий стрим если он идёт — иначе он продолжит писать в state.
+    currentController?.abort()
+    currentController = null
     thinking.value = []
     citations.value = []
     result.value = null
@@ -43,6 +49,10 @@ export function useAnalyze() {
     materialTitle.value = ''
     savedId.value = null
   }
+
+  // На logout / 401 — сбрасываем состояние, чтобы новый юзер не видел чужие данные.
+  const authResetTick = useAuthResetSignal()
+  watch(authResetTick, () => reset())
 
   // Подгружаем сохранённый анализ напрямую в состояние (без стрима).
   function loadSaved(payload: {
@@ -73,6 +83,9 @@ export function useAnalyze() {
     analyzing.value = true
     if (file) materialTitle.value = stripExtension(file.name)
 
+    const controller = new AbortController()
+    currentController = controller
+
     try {
       const formData = new FormData()
       if (text?.trim()) formData.append('text', text)
@@ -83,6 +96,7 @@ export function useAnalyze() {
         method: 'POST',
         credentials: 'include',
         body: formData,
+        signal: controller.signal,
       })
 
       if (response.status === 402) {
@@ -160,11 +174,21 @@ export function useAnalyze() {
         }
       }
     } catch (e: any) {
-      error.value = e?.message || 'Не удалось выполнить анализ'
+      // Abort — это явная отмена (navigation/logout/новый запрос), не показываем как ошибку.
+      if (e?.name !== 'AbortError') {
+        error.value = e?.message || 'Не удалось выполнить анализ'
+      }
     } finally {
+      // Очищаем ссылку только если это всё ещё наш контроллер (могла перебить новая попытка).
+      if (currentController === controller) currentController = null
       analyzing.value = false
       useBilling().refresh()
     }
+  }
+
+  // Внешний abort — для onBeforeUnmount на странице.
+  function abort() {
+    currentController?.abort()
   }
 
   return {
@@ -178,6 +202,7 @@ export function useAnalyze() {
     savedId: readonly(savedId),
     analyze,
     reset,
+    abort,
     loadSaved,
   }
 }

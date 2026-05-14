@@ -19,12 +19,18 @@
 useHead({ title: 'Чат' })
 
 const route = useRoute()
-const { messages, sending, openConversation } = useChat()
+const { messages, sending, openConversation, abort } = useChat()
 const messagesRef = ref<HTMLElement | null>(null)
 
 onMounted(() => {
   const id = route.params.id as string
   if (id) openConversation(id)
+})
+
+// Отменяем активный стрим при уходе с чата — иначе он продолжит писать
+// в модульное состояние messages и вылезет при возврате.
+onBeforeUnmount(() => {
+  if (sending.value) abort()
 })
 
 function scrollIfNeeded(force = false) {
