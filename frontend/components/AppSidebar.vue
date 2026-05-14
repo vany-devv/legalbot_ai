@@ -117,75 +117,85 @@
       </button>
     </div>
 
-    <!-- ─── Contextual list (chat OR analyses) ────────────── -->
+    <!-- ─── Contextual list (chat OR analyses) ─────────────
+         relative + overflow-hidden нужны чтобы leave-блок mode-swap
+         позиционировался строго внутри списка, а не вылазил на main-area. -->
     <div
-      class="flex-1 overflow-y-auto px-2 py-1 transition-opacity duration-150"
+      class="flex-1 overflow-y-auto overflow-x-hidden px-2 py-1 relative transition-opacity duration-150"
       :class="sidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'"
     >
-      <!-- Чаты -->
-      <template v-if="currentMode === 'chat'">
-        <div v-if="!conversations.length" class="sidebar-nav-item cursor-default opacity-60 pointer-events-none">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0 opacity-60">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-          </svg>
-          <span class="sidebar-label text-ink-faint text-xs" :class="sidebarOpen ? 'label-show' : 'label-hide'">Нет диалогов</span>
-        </div>
-        <div
-          v-for="conv in conversations"
-          :key="conv.id"
-          class="relative flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer text-sm transition-all duration-150 mb-0.5 overflow-hidden"
-          :class="conv.id === currentConversationId
-            ? 'bg-brand-dim text-ink'
-            : 'text-ink-muted hover:bg-panel hover:text-ink'"
-          @click="handleOpenChat(conv.id)"
-        >
-          <span
-            v-if="conv.id === currentConversationId"
-            class="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-brand rounded-r-full"
-          />
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0 opacity-50">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-          </svg>
-          <span class="truncate">{{ conv.title }}</span>
-        </div>
-      </template>
-
-      <!-- Анализы -->
-      <template v-else>
-        <div v-if="!analyses.length" class="sidebar-nav-item cursor-default opacity-60 pointer-events-none">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0 opacity-60">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-          </svg>
-          <span class="sidebar-label text-ink-faint text-xs" :class="sidebarOpen ? 'label-show' : 'label-hide'">Нет анализов</span>
-        </div>
-        <div
-          v-for="a in analyses"
-          :key="a.id"
-          class="group relative flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer text-sm transition-all duration-150 mb-0.5 overflow-hidden"
-          :class="a.id === currentAnalysisId
-            ? 'bg-brand-dim text-ink'
-            : 'text-ink-muted hover:bg-panel hover:text-ink'"
-          @click="handleOpenAnalysis(a.id)"
-        >
-          <span
-            v-if="a.id === currentAnalysisId"
-            class="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-brand rounded-r-full"
-          />
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0 opacity-50">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-          </svg>
-          <span class="truncate flex-1">{{ a.title }}</span>
-          <button
-            class="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded text-ink-faint hover:text-danger opacity-0 group-hover:opacity-100 transition-opacity"
-            title="Удалить"
-            @click.stop="confirmDeleteAnalysis(a.id)"
-          >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      <!-- Cross-fade между списками Чат ↔ Анализ при переключении табов.
+           Внутри каждого блока — TransitionGroup для stagger новых элементов. -->
+      <Transition name="mode-swap" mode="out-in">
+        <!-- Чаты -->
+        <div v-if="currentMode === 'chat'" key="chat-list">
+          <div v-if="!conversations.length" class="sidebar-nav-item cursor-default opacity-60 pointer-events-none">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0 opacity-60">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
             </svg>
-          </button>
+            <span class="sidebar-label text-ink-faint text-xs" :class="sidebarOpen ? 'label-show' : 'label-hide'">Нет диалогов</span>
+          </div>
+          <TransitionGroup v-else name="sidebar-item" tag="div">
+            <div
+              v-for="conv in conversations"
+              :key="conv.id"
+              class="relative flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer text-sm transition-all duration-150 mb-0.5 overflow-hidden"
+              :class="conv.id === currentConversationId
+                ? 'bg-brand-dim text-ink'
+                : 'text-ink-muted hover:bg-panel hover:text-ink'"
+              @click="handleOpenChat(conv.id)"
+            >
+              <span
+                v-if="conv.id === currentConversationId"
+                class="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-brand rounded-r-full"
+              />
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0 opacity-50">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+              <span class="truncate">{{ conv.title }}</span>
+            </div>
+          </TransitionGroup>
         </div>
-      </template>
+
+        <!-- Анализы -->
+        <div v-else key="analyze-list">
+          <div v-if="!analyses.length" class="sidebar-nav-item cursor-default opacity-60 pointer-events-none">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0 opacity-60">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+            <span class="sidebar-label text-ink-faint text-xs" :class="sidebarOpen ? 'label-show' : 'label-hide'">Нет анализов</span>
+          </div>
+          <TransitionGroup v-else name="sidebar-item" tag="div">
+            <div
+              v-for="a in analyses"
+              :key="a.id"
+              class="group relative flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer text-sm transition-all duration-150 mb-0.5 overflow-hidden"
+              :class="a.id === currentAnalysisId
+                ? 'bg-brand-dim text-ink'
+                : 'text-ink-muted hover:bg-panel hover:text-ink'"
+              @click="handleOpenAnalysis(a.id)"
+            >
+              <span
+                v-if="a.id === currentAnalysisId"
+                class="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-brand rounded-r-full"
+              />
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0 opacity-50">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+              <span class="truncate flex-1">{{ a.title }}</span>
+              <button
+                class="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded text-ink-faint hover:text-danger opacity-0 group-hover:opacity-100 transition-opacity"
+                title="Удалить"
+                @click.stop="confirmDeleteAnalysis(a.id)"
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+          </TransitionGroup>
+        </div>
+      </Transition>
     </div>
 
     <!-- ─── Secondary nav + user ──────────────────────────── -->
@@ -373,5 +383,47 @@ async function confirmDeleteAnalysis(id: string) {
   opacity: 0;
   max-width: 0;
   transition: opacity 0.1s ease;
+}
+
+/* ─── List item stagger (новый чат/анализ въезжает сверху) ─── */
+.sidebar-item-enter-active {
+  transition: opacity 180ms var(--ease-out), transform 180ms var(--ease-out);
+}
+.sidebar-item-leave-active {
+  transition: opacity 140ms var(--ease-out), transform 140ms var(--ease-out);
+}
+.sidebar-item-enter-from {
+  opacity: 0;
+  transform: translateX(-6px);
+}
+.sidebar-item-leave-to {
+  opacity: 0;
+  transform: translateX(6px);
+}
+.sidebar-item-move {
+  transition: transform 200ms var(--ease-out);
+}
+
+/* ─── Cross-fade при переключении табов Чат ↔ Анализ ───
+   Leave-блок становится absolute с inset чтобы не толкать layout
+   (parent контейнер списка имеет position:relative + overflow-x:hidden,
+   так что блок не выходит за рамки sidebar'a). */
+.mode-swap-enter-active {
+  transition: opacity 180ms var(--ease-out), transform 180ms var(--ease-out);
+}
+.mode-swap-leave-active {
+  transition: opacity 120ms var(--ease-out), transform 120ms var(--ease-out);
+  position: absolute;
+  left: 0.5rem;   /* matches parent px-2 */
+  right: 0.5rem;
+  top: 0.25rem;   /* matches parent py-1 */
+}
+.mode-swap-enter-from {
+  opacity: 0;
+  transform: translateX(4px);
+}
+.mode-swap-leave-to {
+  opacity: 0;
+  transform: translateX(-4px);
 }
 </style>

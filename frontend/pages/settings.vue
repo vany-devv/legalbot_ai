@@ -142,6 +142,7 @@
                 Отмена
               </button>
             </div>
+            <Transition name="form-reveal">
             <form v-if="showPasswordForm" class="flex flex-col gap-3 max-w-[360px] mt-4" @submit.prevent="handleChangePassword">
               <div class="relative">
                 <input
@@ -193,8 +194,12 @@
                   <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
                 </button>
               </div>
-              <p v-if="pwError" class="text-sm text-danger">{{ pwError }}</p>
-              <p v-if="pwSuccess" class="text-sm text-ok">{{ pwSuccess }}</p>
+              <Transition name="error-slide">
+                <p v-if="pwError" class="text-sm text-danger">{{ pwError }}</p>
+              </Transition>
+              <Transition name="error-slide">
+                <p v-if="pwSuccess" class="text-sm text-ok">{{ pwSuccess }}</p>
+              </Transition>
               <button
                 type="submit"
                 class="self-start px-4 py-2 rounded-lg bg-brand text-white text-sm font-medium hover:bg-brand-lit transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
@@ -203,6 +208,7 @@
                 {{ pwLoading ? 'Сохранение...' : 'Сохранить' }}
               </button>
             </form>
+            </Transition>
           </div>
 
           <div class="flex items-center justify-between gap-4 py-3">
@@ -366,5 +372,37 @@ async function handleLogout() {
 .palette-swatch:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* ─── Password form reveal — opacity + slide вместо max-height
+   (форма имеет динамическую высоту из-за strength-bar). ─── */
+.form-reveal-enter-active {
+  transition: opacity 240ms var(--ease-out), transform 240ms var(--ease-out);
+}
+.form-reveal-leave-active {
+  transition: opacity 180ms var(--ease-out), transform 180ms var(--ease-out);
+}
+.form-reveal-enter-from {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+.form-reveal-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+/* ─── Inline error/success messages slide ─── */
+.error-slide-enter-active {
+  transition: opacity 180ms var(--ease-out), transform 180ms var(--ease-out);
+}
+.error-slide-leave-active {
+  transition: opacity 140ms var(--ease-out);
+}
+.error-slide-enter-from {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+.error-slide-leave-to {
+  opacity: 0;
 }
 </style>

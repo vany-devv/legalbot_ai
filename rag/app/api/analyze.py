@@ -536,21 +536,38 @@ async def analyze_stream(
             supplementary_context=supplementary_ctx,
         )
 
-        parsed, raw = await _analyze_stage2(llm, AD_ANALYSIS_SYSTEM_PROMPT, user_msg)
-        logger.info("[ANALYZE] LLM raw output:\n%s", raw)
+        # Per-risk streaming: каждый завершённый объект из массива risks летит
+        # на фронт как отдельное `risk`-событие, юзер видит карточки появляющимися
+        # по одной (UX-задержка до первого риска ~5-8 сек вместо 15-25 сек).
+        risks: list[dict] = []
+        summary = ""
+        overall = "unknown"
+        async for ev_type, payload in _analyze_stage2_stream(llm, AD_ANALYSIS_SYSTEM_PROMPT, user_msg):
+            if ev_type == "risk":
+                risks.append(payload)
+                yield _event({"type": "risk", "data": payload})
+            elif ev_type == "done":
+                summary = payload.get("summary", "") or ""
+                overall = payload.get("overall_risk_level", "unknown") or "unknown"
+                yield _event({"type": "result_meta", "summary": summary, "overall_risk_level": overall})
 
-        risks = parsed.get("risks", [])
         logger.info(
             "analyze_completed",
             extra={
-                "overall": parsed.get("overall_risk_level"),
+                "overall": overall,
                 "risks_count": len(risks),
                 "category": classification.get("category"),
                 "material_kind": classification.get("material_kind"),
             },
         )
 
-        yield _event({"type": "result", "data": parsed})
+        # Backward-compat: финальный агрегированный result для оркестратора (он его
+        # сохранит в БД). Фронт игнорит если уже видел `risk`-события.
+        yield _event({"type": "result", "data": {
+            "risks": risks,
+            "summary": summary,
+            "overall_risk_level": overall,
+        }})
 
         # Догружаем статьи, упомянутые в рисках, но отсутствующие в выгруженных чанках.
         extra_chunks = await _fetch_missing_for_risks(repo, risks, mandatory + supplementary)
@@ -842,3 +859,144 @@ async def _analyze_stage2(
         return parsed2, raw2
     # Возвращаем что есть (возможно пустое) — клиент увидит {} и поймёт что не сработало.
     return parsed or parsed2, raw2 if parsed2 else raw
+
+
+def _extract_complete_risks(buffer: str, emitted_count: int) -> list[dict]:
+    """Извлекает завершённые JSON-объекты из массива `"risks": [...]` стримящегося буфера.
+
+    Сканер: state machine с двумя счётчиками — depth для балансных {}
+    и in_string флаг. Внутри string content игнорим скобки (важно для случая
+    когда description содержит `{` или `}` в свободном тексте). Учитываем
+    escape-последовательности типа `\\"`.
+
+    Возвращает только новые риски (skipping первые emitted_count). Идемпотентна
+    на одинаковом (buffer, emitted_count) — даёт пустой список если новых нет.
+    """
+    m = re.search(r'"risks"\s*:\s*\[', buffer)
+    if not m:
+        return []
+
+    completed_blocks: list[str] = []
+    pos = m.end()
+    depth = 0
+    in_string = False
+    object_start = -1
+    n = len(buffer)
+
+    while pos < n:
+        c = buffer[pos]
+        if in_string:
+            if c == '\\':
+                pos += 2  # пропускаем escape-пару (\", \\, \n и т.п.)
+                continue
+            if c == '"':
+                in_string = False
+            pos += 1
+            continue
+        # outside string
+        if c == '"':
+            in_string = True
+        elif c == '{':
+            if depth == 0:
+                object_start = pos
+            depth += 1
+        elif c == '}':
+            depth -= 1
+            if depth == 0 and object_start != -1:
+                completed_blocks.append(buffer[object_start:pos + 1])
+                object_start = -1
+        elif c == ']' and depth == 0:
+            # Конец массива risks — останавливаемся
+            break
+        pos += 1
+
+    new_blocks = completed_blocks[emitted_count:]
+    results: list[dict] = []
+    for block in new_blocks:
+        try:
+            risk = json.loads(block)
+            if isinstance(risk, dict):
+                results.append(risk)
+        except json.JSONDecodeError:
+            recovered = _recover_single_risk(block)
+            if recovered:
+                results.append(recovered)
+    return results
+
+
+def _recover_single_risk(block: str) -> dict | None:
+    """Извлекает поля одного риска регэкспом (для битого escaping внутри строк).
+
+    Минимум должен быть fragment + (description ИЛИ risk_level), иначе
+    считаем что блок не риск.
+    """
+    risk: dict = {}
+    for field in _RISK_FIELDS:
+        m = re.search(rf'"{field}"\s*:\s*', block)
+        if not m:
+            continue
+        val = _extract_string_value(block[m.end():])
+        if val:
+            risk[field] = val
+    if "fragment" in risk and ("description" in risk or "risk_level" in risk):
+        return risk
+    return None
+
+
+async def _analyze_stage2_stream(
+    llm: LLMProvider, system: str, user: str,
+):
+    """Stream-версия Stage 2 — async generator событий для SSE.
+
+    Yields:
+      ("risk", dict) — каждый новый завершённый объект из массива risks
+      ("done", {summary, overall_risk_level, raw, risks_total}) — финал
+
+    Retry-fallback: если стрим дал 0 рисков (LLM странно построил JSON или
+    стрим оборвался) — делаем один retry через non-streaming complete().
+    Это гарантирует отсутствие дубликатов (мы НЕ дополняем уже эмитированных).
+    """
+    buffer = ""
+    emitted = 0
+    stream_failed = False
+
+    try:
+        async for chunk in llm.stream(system=system, user=user):
+            buffer += chunk
+            new_risks = _extract_complete_risks(buffer, emitted)
+            for risk in new_risks:
+                emitted += 1
+                yield ("risk", risk)
+    except Exception as exc:
+        logger.warning("[ANALYZE] stage 2 stream failed: %s", exc)
+        stream_failed = True
+
+    logger.info("[ANALYZE] stage 2 stream raw output (len=%d):\n%s", len(buffer), buffer)
+
+    # Парсим полный буфер для summary/overall.
+    parsed = _parse_json(buffer) if buffer else {}
+
+    # Retry-fallback: 0 рисков (или стрим упал и не успел ничего эмитнуть).
+    if emitted == 0 and settings.analyze_recovery_enabled:
+        logger.warning("[ANALYZE] stream emitted 0 risks (failed=%s), falling back to non-streaming retry", stream_failed)
+        try:
+            raw_retry = await llm.complete(system=system, user=user)
+            logger.info("[ANALYZE] retry raw output:\n%s", raw_retry)
+            parsed_retry = _parse_json(raw_retry)
+            for risk in parsed_retry.get("risks", []):
+                emitted += 1
+                yield ("risk", risk)
+            parsed = parsed_retry
+            buffer = raw_retry
+            if emitted > 0:
+                logger.info("[ANALYZE] retry succeeded with %d risks", emitted)
+                logger.info("parse_event", extra={"parse_path": "stream_retry_ok"})
+        except Exception as exc:
+            logger.error("[ANALYZE] retry also failed: %s", exc)
+
+    yield ("done", {
+        "summary": parsed.get("summary", ""),
+        "overall_risk_level": parsed.get("overall_risk_level", "unknown"),
+        "raw": buffer,
+        "risks_total": emitted,
+    })

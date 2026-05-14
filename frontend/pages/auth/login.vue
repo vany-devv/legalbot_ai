@@ -53,7 +53,9 @@
           </div>
         </div>
         <div class="flex items-center justify-between">
-          <p v-if="error" class="text-sm text-danger">{{ error }}</p>
+          <Transition name="error-slide">
+            <p v-if="error" class="text-sm text-danger">{{ error }}</p>
+          </Transition>
           <button
             type="button"
             class="text-sm text-ink-muted hover:text-brand transition-colors cursor-pointer ml-auto"
@@ -124,4 +126,19 @@ async function handleLogin() {
 }
 .auth-input:focus { border-color: var(--accent); }
 .auth-input::placeholder { color: var(--text-tertiary); }
+
+/* ─── Error message slide-fade ─── */
+.error-slide-enter-active {
+  transition: opacity 180ms var(--ease-out), transform 180ms var(--ease-out);
+}
+.error-slide-leave-active {
+  transition: opacity 140ms var(--ease-out);
+}
+.error-slide-enter-from {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+.error-slide-leave-to {
+  opacity: 0;
+}
 </style>

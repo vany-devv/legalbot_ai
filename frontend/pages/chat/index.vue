@@ -14,10 +14,16 @@
           </div>
         </div>
 
-        <!-- Category grid -->
-        <div class="w-full max-w-[760px] grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        <!-- Category grid — stagger на mount через CSS variable --stagger -->
+        <TransitionGroup
+          name="cat-card"
+          appear
+          tag="div"
+          class="w-full max-w-[760px] grid grid-cols-1 sm:grid-cols-2 gap-2.5"
+        >
           <button
-            v-for="cat in categories" :key="cat.title"
+            v-for="(cat, i) in categories" :key="cat.title"
+            :style="{ '--stagger': `${i * 60}ms` }"
             class="cat-card group flex items-start gap-3 p-4 rounded-xl border border-rim bg-panel hover:bg-dimmed hover:border-rim-strong transition-all text-left cursor-pointer"
             @click="send(cat.query)"
           >
@@ -31,12 +37,14 @@
               <p class="text-[13px] text-ink-muted leading-snug truncate">{{ cat.subtitle }}</p>
             </div>
           </button>
-        </div>
+        </TransitionGroup>
       </div>
 
       <!-- Messages -->
       <div v-else class="max-w-[780px] mx-auto py-4 w-full">
-        <ChatMessage v-for="msg in messages" :key="msg.id" :message="msg" />
+        <TransitionGroup name="chat-msg" tag="div">
+          <ChatMessage v-for="msg in messages" :key="msg.id" :message="msg" />
+        </TransitionGroup>
         <div v-if="sending" class="flex gap-1 py-4 pl-11">
           <span class="typing-dot" /><span class="typing-dot" /><span class="typing-dot" />
         </div>
@@ -106,6 +114,29 @@ watch(messages, () => scrollIfNeeded(false), { deep: true })
 }
 .cat-card:hover {
   transform: translateY(-1px);
+}
+
+/* ─── Category cards stagger appear ─── */
+.cat-card-enter-active {
+  transition:
+    opacity 280ms cubic-bezier(0.2, 0.7, 0.2, 1) var(--stagger, 0ms),
+    transform 280ms cubic-bezier(0.34, 1.3, 0.64, 1) var(--stagger, 0ms);
+}
+.cat-card-enter-from {
+  opacity: 0;
+  transform: translateY(12px);
+}
+
+/* ─── Chat messages entrance ─── */
+.chat-msg-enter-active {
+  transition: opacity 220ms cubic-bezier(0.2, 0.7, 0.2, 1), transform 220ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.chat-msg-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+.chat-msg-move {
+  transition: transform 220ms cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
 .typing-dot {

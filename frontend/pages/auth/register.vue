@@ -84,7 +84,9 @@
             </button>
           </div>
         </div>
-        <p v-if="error" class="text-sm text-danger text-center">{{ error }}</p>
+        <Transition name="error-slide">
+          <p v-if="error" class="text-sm text-danger text-center">{{ error }}</p>
+        </Transition>
         <button
           type="submit"
           class="w-full py-3 rounded-lg bg-brand text-white text-sm font-semibold hover:bg-brand-lit transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed mt-1"
@@ -170,4 +172,19 @@ async function handleRegister() {
 }
 .auth-input:focus { border-color: var(--accent); }
 .auth-input::placeholder { color: var(--text-tertiary); }
+
+/* ─── Error message slide-fade ─── */
+.error-slide-enter-active {
+  transition: opacity 180ms var(--ease-out), transform 180ms var(--ease-out);
+}
+.error-slide-leave-active {
+  transition: opacity 140ms var(--ease-out);
+}
+.error-slide-enter-from {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+.error-slide-leave-to {
+  opacity: 0;
+}
 </style>
