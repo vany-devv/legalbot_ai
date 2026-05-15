@@ -226,22 +226,70 @@ async def _resolve_ad_text(
     raise HTTPException(status_code=422, detail="Provide either 'text' or 'file'")
 
 
+def _reconstruct_article(chunks: list[SearchResult]) -> str:
+    """Склеивает чанки ОДНОЙ статьи обратно в непрерывный текст.
+
+    Chunker дробит длинные статьи по пунктам для качества retrieval и при этом:
+      1) префиксит continuation-чанкам строку-заголовок "Статья N..." (chunking.py),
+      2) при сверхдлинном пункте дробит его SimpleChunker'ом с overlap=200.
+    Эта функция убирает оба артефакта: срезает повторный заголовок и
+    de-overlap дедупит стык. Порядок чанков уже верный (fetch_by_articles
+    ORDER BY chunk_index), но если есть meta.chunk_index_in_article у всех —
+    досортируем для надёжности. Ничего не теряем — конкатенируем всё.
+    """
+    if not chunks:
+        return ""
+    if all(isinstance(c.meta.get("chunk_index_in_article"), int) for c in chunks):
+        chunks = sorted(chunks, key=lambda c: c.meta["chunk_index_in_article"])
+
+    first_content = chunks[0].content
+    # header_line — первая непустая строка первого чанка ("Статья N. ...")
+    header_line = ""
+    for line in first_content.splitlines():
+        if line.strip():
+            header_line = line.strip()
+            break
+
+    result = first_content
+    for c in chunks[1:]:
+        body = c.content.lstrip()
+        # 1) Срезаем искусственно добавленный заголовок статьи
+        if header_line and body.startswith(header_line):
+            body = body[len(header_line):].lstrip("\n \t")
+        # 2) De-overlap: ищем макс. пересечение хвоста result с началом body
+        if body and result:
+            max_k = min(300, len(body), len(result))
+            for k in range(max_k, 19, -1):
+                if result[-k:] == body[:k]:
+                    body = body[k:]
+                    break
+        body = body.strip()
+        if body:
+            result += "\n\n" + body
+    return result
+
+
 def _build_structured_context(mandatory: list[SearchResult]) -> str:
     """Build context section from mandatory (direct lookup) chunks.
 
-    Mandatory chunks are grouped by (law, article) и склеиваются для реконструкции
-    многочастных статей в один непрерывный текстовый блок (LLM видит статью целиком).
+    Чанки группируются по (law, article) и склеиваются `_reconstruct_article`
+    в непрерывную статью — LLM видит статью целиком, без повторов заголовка.
     """
     groups: dict[tuple[str, str], list[SearchResult]] = {}
+    order: list[tuple[str, str]] = []
     for r in mandatory:
         key = (r.meta.get("law", ""), r.meta.get("article", ""))
-        groups.setdefault(key, []).append(r)
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(r)
 
     parts: list[str] = []
-    for i, ((law, article), chunks) in enumerate(groups.items(), 1):
+    for i, key in enumerate(order, 1):
+        law, article = key
+        chunks = groups[key]
         header = f"[{i}] {law}" + (f", ст. {article}" if article else "")
-        combined = "\n".join(c.content for c in chunks)
-        parts.append(f"{header}\n{combined}")
+        parts.append(f"{header}\n{_reconstruct_article(chunks)}")
 
     return "\n\n---\n\n".join(parts) if parts else "(нет)"
 
@@ -370,13 +418,12 @@ def _build_all_citations(
     mandatory: list[SearchResult],
     risks: list[dict] | None = None,
 ) -> list[CitationResponse]:
-    """Build citation list filtered by risks' law_references.
+    """Build citation list — ОДИН источник = ОДНА статья (склеенная целиком).
 
-    Dedup идёт по chunk_id (а не по (law, article)), чтобы все чанки многочастной
-    статьи попали в финальный список — юзер увидит полную статью, не обрывок.
-    Фильтр оставляет только статьи на которые реально ссылаются риски.
-    Multi-parser (`_parse_law_references_all`) обеспечивает что риск с несколькими
-    нормами в одной строке отдаёт все эти нормы в `referenced`.
+    Чанки группируются по нормализованному ключу (law_num, article_num) и
+    склеиваются `_reconstruct_article` в непрерывный текст. Юзер видит одну
+    карточку на статью, а не N обрывков. Фильтр оставляет только статьи на
+    которые реально ссылаются риски (multi-parser ловит несколько норм в строке).
     """
     referenced: set[tuple[str, str]] = set()
     for risk in risks or []:
@@ -385,35 +432,33 @@ def _build_all_citations(
         for parsed in _parse_law_references_all(risk.get("law_reference", "")):
             referenced.add(parsed)
 
-    seen_chunk_ids: set[str] = set()
-    result: list[CitationResponse] = []
+    # Группируем по (law_num, article_num), сохраняя порядок первого появления.
+    groups: dict[tuple[str, str], list[SearchResult]] = {}
+    order: list[tuple[str, str]] = []
+    for r in mandatory:
+        k = _chunk_law_article_key(r.meta)
+        if k not in groups:
+            groups[k] = []
+            order.append(k)
+        groups[k].append(r)
 
-    def _add(r: SearchResult) -> None:
-        if r.chunk_id in seen_chunk_ids:
-            return
-        seen_chunk_ids.add(r.chunk_id)
-        result.append(CitationResponse(
-            chunk_id=r.chunk_id,
-            document_id=r.document_id,
-            content=r.content,
-            retrieval_score=r.score,
-            meta=r.meta,
-        ))
+    def _make(chunks: list[SearchResult]) -> CitationResponse:
+        first = chunks[0]
+        return CitationResponse(
+            chunk_id=first.chunk_id,
+            document_id=first.document_id,
+            content=_reconstruct_article(chunks),
+            retrieval_score=max(c.score for c in chunks),
+            meta=first.meta,
+        )
 
     if referenced:
-        # Фильтр-режим: оставляем только чанки тех (law, article), на которые
-        # риски ссылаются. ВСЕ чанки таких статей попадают (dedup по chunk_id).
-        for r in mandatory:
-            if _chunk_law_article_key(r.meta) in referenced:
-                _add(r)
+        result = [_make(groups[k]) for k in order if k in referenced]
         if result:
             return result
-        # Если фильтрация ничего не дала (битый law_reference от LLM) — fallback
-        # на mandatory чтобы юзер хоть что-то видел.
+        # Битый law_reference от LLM → fallback на все статьи mandatory.
 
-    for r in mandatory:
-        _add(r)
-    return result
+    return [_make(groups[k]) for k in order]
 
 
 @router.post("", response_model=AnalyzeResponse)

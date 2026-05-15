@@ -242,15 +242,8 @@
                       <Transition name="source-expand">
                         <div
                           v-if="expandedSources.has(group.key)"
-                          class="ml-[26px] mt-1 mb-2 pl-3 border-l-2 border-rim text-[12px] leading-[1.55] text-ink-muted whitespace-pre-line space-y-2"
-                        >
-                          <div v-for="(c, ci) in group.chunks" :key="c.id">
-                            <div v-if="group.chunks.length > 1" class="text-[10px] font-semibold uppercase tracking-wider text-ink-faint mb-0.5">
-                              Часть {{ ci + 1 }} из {{ group.chunks.length }}
-                            </div>
-                            {{ c.quote || '—' }}
-                          </div>
-                        </div>
+                          class="ml-[26px] mt-1 mb-2 pl-3 border-l-2 border-rim text-[12px] leading-[1.55] text-ink-muted whitespace-pre-line"
+                        >{{ groupText(group.chunks) }}</div>
                       </Transition>
                     </div>
                   </div>
@@ -299,6 +292,12 @@ const groupedCitations = computed(() => {
 })
 
 const expandedSources = ref<Set<string>>(new Set())
+
+// Текст группы источника — см. analyze/index.vue для деталей.
+function groupText(chunks: any[]): string {
+  if (chunks.length === 1) return chunks[0].quote || '—'
+  return chunks.map(c => (c.quote || '').trim()).filter(Boolean).join('\n\n') || '—'
+}
 
 const analyzedText = computed(() => materialText.value || '')
 
