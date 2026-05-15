@@ -172,10 +172,18 @@ class LegalDocumentChunker:
             if re.search(r"(?i)исключена\s+поправкой", article_text):
                 continue
 
-            for sub in self._chunk_article(article_text, base_meta):
-                # Skip orphaned fragments (e.g. amendment metadata lines)
-                if len(sub.content.strip()) < 80:
-                    continue
+            # Сначала отфильтровываем orphan'ы (короткие amendment-блоки), потом
+            # размечаем chunk_index_in_article / total_chunks_in_article на оставшихся
+            # чанках. Это нужно фронту для группировки многочастных статей в одну
+            # карточку источника (UX) — без этих полей он бы вычислял через computed,
+            # но в БД это поле понадобится для будущих ingest'ов и аналитики.
+            sub_chunks = [
+                sub for sub in self._chunk_article(article_text, base_meta)
+                if len(sub.content.strip()) >= 80
+            ]
+            total = len(sub_chunks)
+            for sub_idx, sub in enumerate(sub_chunks):
+                sub.meta = {**sub.meta, "chunk_index_in_article": sub_idx, "total_chunks_in_article": total}
                 sub.index = idx
                 chunks.append(sub)
                 idx += 1

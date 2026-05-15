@@ -206,43 +206,44 @@
                 </div>
 
                 <!-- Sources -->
-                <div v-if="citations.length" class="bg-panel border border-rim rounded-xl p-4 flex flex-col gap-3">
+                <div v-if="groupedCitations.length" class="bg-panel border border-rim rounded-xl p-4 flex flex-col gap-3">
                   <span class="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
-                    Источники · {{ citations.length }}
+                    Источники · {{ groupedCitations.length }}
                   </span>
                   <div class="flex flex-col gap-1">
-                    <div v-for="(c, idx) in citations" :key="c.id" class="source-item">
+                    <div v-for="(group, idx) in groupedCitations" :key="group.key" class="source-item">
                       <button
                         class="source-row w-full flex gap-2.5 items-start py-1.5 text-left transition-colors hover:bg-dimmed/40 rounded -mx-1 px-1 cursor-pointer"
-                        @click="toggleSource(idx)"
+                        @click="toggleSource(group.key)"
                       >
                         <span class="flex-shrink-0 w-5 h-5 rounded text-center text-[11px] leading-5 bg-raised text-ink-muted font-medium tabular-nums">
                           {{ idx + 1 }}
                         </span>
                         <div class="flex flex-col min-w-0 flex-1">
                           <span class="text-[12px] text-ink font-medium truncate">
-                            {{ formatLaw(c) }}
+                            {{ formatLaw(group.chunks[0]) }}
+                            <span v-if="group.chunks.length > 1" class="text-ink-faint font-normal">
+                              · {{ group.chunks.length }} ч.
+                            </span>
                           </span>
                           <span class="text-[11px] text-ink-faint truncate">
-                            {{ formatLawSub(c) }}
+                            {{ formatLawSub(group.chunks[0]) }}
                           </span>
                         </div>
                         <svg
                           width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
                           stroke-linecap="round" stroke-linejoin="round"
                           class="flex-shrink-0 mt-1.5 text-ink-faint transition-transform duration-200"
-                          :class="expandedSources.has(idx) ? 'rotate-180' : ''"
+                          :class="expandedSources.has(group.key) ? 'rotate-180' : ''"
                         >
                           <polyline points="6 9 12 15 18 9"/>
                         </svg>
                       </button>
                       <Transition name="source-expand">
                         <div
-                          v-if="expandedSources.has(idx)"
+                          v-if="expandedSources.has(group.key)"
                           class="ml-[26px] mt-1 mb-2 pl-3 border-l-2 border-rim text-[12px] leading-[1.55] text-ink-muted whitespace-pre-line"
-                        >
-                          {{ c.quote || '—' }}
-                        </div>
+                        >{{ groupText(group.chunks) }}</div>
                       </Transition>
                     </div>
                   </div>
@@ -271,14 +272,39 @@ const notFound = ref(false)
 const sidebarOpen = ref(true)
 const severityFilter = ref<'high' | 'medium' | 'low' | null>(null)
 const exporting = ref(false)
-const expandedSources = ref<Set<number>>(new Set())
+// Группировка источников по (law, article) — см. analyze/index.vue для деталей.
+const groupedCitations = computed(() => {
+  const groups = new Map<string, any[]>()
+  for (const c of citations.value) {
+    const key = `${(c.meta as any)?.law ?? ''}|${(c.meta as any)?.article ?? ''}`
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key)!.push(c)
+  }
+  for (const list of groups.values()) {
+    list.sort((a, b) => {
+      const ai = a.meta?.chunk_index_in_article
+      const bi = b.meta?.chunk_index_in_article
+      if (typeof ai === 'number' && typeof bi === 'number') return ai - bi
+      return a.id < b.id ? -1 : 1
+    })
+  }
+  return Array.from(groups.entries()).map(([key, chunks]) => ({ key, chunks }))
+})
+
+const expandedSources = ref<Set<string>>(new Set())
+
+// Текст группы источника — см. analyze/index.vue для деталей.
+function groupText(chunks: any[]): string {
+  if (chunks.length === 1) return chunks[0].quote || '—'
+  return chunks.map(c => (c.quote || '').trim()).filter(Boolean).join('\n\n') || '—'
+}
 
 const analyzedText = computed(() => materialText.value || '')
 
-function toggleSource(idx: number) {
+function toggleSource(key: string) {
   const s = new Set(expandedSources.value)
-  if (s.has(idx)) s.delete(idx)
-  else s.add(idx)
+  if (s.has(key)) s.delete(key)
+  else s.add(key)
   expandedSources.value = s
 }
 

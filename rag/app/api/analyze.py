@@ -128,23 +128,6 @@ async def _classify_ad(llm: LLMProvider, ad_text: str) -> dict:
     }
 
 
-async def _supplementary_search(
-    retriever: HybridRetriever,
-    queries: list[str],
-    top_k: int = 5,
-) -> list[SearchResult]:
-    """Run 1-2 supplementary searches for broad coverage beyond direct lookup."""
-    seen_ids: set[str] = set()
-    merged: list[SearchResult] = []
-    for query in queries[:2]:
-        results = await retriever.search(query, top_k=top_k)
-        for r in results:
-            if r.chunk_id not in seen_ids:
-                seen_ids.add(r.chunk_id)
-                merged.append(r)
-    return merged
-
-
 def _normalize_extracted_text(text: str) -> str:
     """Чистит soft-wrap'ы PDF и навязывает структуру абзацев.
 
@@ -243,47 +226,72 @@ async def _resolve_ad_text(
     raise HTTPException(status_code=422, detail="Provide either 'text' or 'file'")
 
 
-def _build_structured_context(
-    mandatory: list[SearchResult],
-    supplementary: list[SearchResult],
-) -> tuple[str, str]:
-    """Build two context sections: mandatory (direct lookup) and supplementary (retrieval).
+def _reconstruct_article(chunks: list[SearchResult]) -> str:
+    """Склеивает чанки ОДНОЙ статьи обратно в непрерывный текст.
 
-    Mandatory chunks are grouped by (law, article) and concatenated to reconstruct
-    multi-chunk articles as a single continuous text block.
-    Supplementary drops any (law, article) already covered by mandatory.
+    Chunker дробит длинные статьи по пунктам для качества retrieval и при этом:
+      1) префиксит continuation-чанкам строку-заголовок "Статья N..." (chunking.py),
+      2) при сверхдлинном пункте дробит его SimpleChunker'ом с overlap=200.
+    Эта функция убирает оба артефакта: срезает повторный заголовок и
+    de-overlap дедупит стык. Порядок чанков уже верный (fetch_by_articles
+    ORDER BY chunk_index), но если есть meta.chunk_index_in_article у всех —
+    досортируем для надёжности. Ничего не теряем — конкатенируем всё.
     """
-    # Group mandatory by (law, article), preserving chunk order (already sorted by chunk_index)
+    if not chunks:
+        return ""
+    if all(isinstance(c.meta.get("chunk_index_in_article"), int) for c in chunks):
+        chunks = sorted(chunks, key=lambda c: c.meta["chunk_index_in_article"])
+
+    first_content = chunks[0].content
+    # header_line — первая непустая строка первого чанка ("Статья N. ...")
+    header_line = ""
+    for line in first_content.splitlines():
+        if line.strip():
+            header_line = line.strip()
+            break
+
+    result = first_content
+    for c in chunks[1:]:
+        body = c.content.lstrip()
+        # 1) Срезаем искусственно добавленный заголовок статьи
+        if header_line and body.startswith(header_line):
+            body = body[len(header_line):].lstrip("\n \t")
+        # 2) De-overlap: ищем макс. пересечение хвоста result с началом body
+        if body and result:
+            max_k = min(300, len(body), len(result))
+            for k in range(max_k, 19, -1):
+                if result[-k:] == body[:k]:
+                    body = body[k:]
+                    break
+        body = body.strip()
+        if body:
+            result += "\n\n" + body
+    return result
+
+
+def _build_structured_context(mandatory: list[SearchResult]) -> str:
+    """Build context section from mandatory (direct lookup) chunks.
+
+    Чанки группируются по (law, article) и склеиваются `_reconstruct_article`
+    в непрерывную статью — LLM видит статью целиком, без повторов заголовка.
+    """
     groups: dict[tuple[str, str], list[SearchResult]] = {}
+    order: list[tuple[str, str]] = []
     for r in mandatory:
         key = (r.meta.get("law", ""), r.meta.get("article", ""))
-        groups.setdefault(key, []).append(r)
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(r)
 
-    mandatory_parts: list[str] = []
-    for i, ((law, article), chunks) in enumerate(groups.items(), 1):
-        header = f"[{i}] {law}" + (f", ст. {article}" if article else "")
-        combined = "\n".join(c.content for c in chunks)
-        mandatory_parts.append(f"{header}\n{combined}")
-
-    mandatory_ctx = "\n\n---\n\n".join(mandatory_parts) if mandatory_parts else "(нет)"
-
-    # Build supplementary, skipping (law, article) already in mandatory
-    covered: set[tuple[str, str]] = set(groups.keys())
-    supp_parts: list[str] = []
-    supp_idx = len(groups) + 1
-    for r in supplementary:
-        key = (r.meta.get("law", ""), r.meta.get("article", ""))
-        if key in covered:
-            continue
-        covered.add(key)
+    parts: list[str] = []
+    for i, key in enumerate(order, 1):
         law, article = key
-        header = f"[{supp_idx}] {law}" + (f", ст. {article}" if article else "")
-        supp_parts.append(f"{header}\n{r.content}")
-        supp_idx += 1
+        chunks = groups[key]
+        header = f"[{i}] {law}" + (f", ст. {article}" if article else "")
+        parts.append(f"{header}\n{_reconstruct_article(chunks)}")
 
-    supplementary_ctx = "\n\n---\n\n".join(supp_parts) if supp_parts else "(нет)"
-
-    return mandatory_ctx, supplementary_ctx
+    return "\n\n---\n\n".join(parts) if parts else "(нет)"
 
 
 async def _fetch_missing_for_risks(
@@ -293,9 +301,10 @@ async def _fetch_missing_for_risks(
 ) -> list[SearchResult]:
     """Догружает из БД статьи, на которые ссылаются риски, но которых нет в already.
 
-    Stage 2 может зафлагать норму, которую Stage 1 не запросил (или retrieval не
-    подтянул). Без догрузки фильтр в _build_all_citations найдёт 0 источников
-    при непустом списке рисков. Этот хелпер закрывает разрыв.
+    Stage 2 может зафлагать норму, которую Stage 1 не запросил. Без догрузки фильтр
+    в _build_all_citations найдёт 0 источников при непустом списке рисков. Этот
+    хелпер закрывает разрыв. Использует multi-parser — догружаем ВСЕ упомянутые
+    в риске статьи, а не только первую (риск может ссылаться на несколько норм).
     """
     if not risks:
         return []
@@ -306,9 +315,9 @@ async def _fetch_missing_for_risks(
     for risk in risks:
         if not isinstance(risk, dict):
             continue
-        parsed = _parse_law_reference(risk.get("law_reference", ""))
-        if parsed and parsed not in have_keys:
-            needed.add(parsed)
+        for parsed in _parse_law_references_all(risk.get("law_reference", "")):
+            if parsed not in have_keys:
+                needed.add(parsed)
     if not needed:
         return []
     target_articles = [{"law": law, "article": article} for (law, article) in needed]
@@ -321,28 +330,69 @@ async def _fetch_missing_for_risks(
     return extra
 
 
-def _parse_law_reference(ref: str) -> tuple[str, str] | None:
-    """Парсит ссылку из risk.law_reference в (номер_закона, номер_статьи).
+def _parse_law_reference_segment(segment: str) -> tuple[str | None, str | None]:
+    """Парсит один сегмент строки в (law_num, article_num). Любая часть может быть None.
 
-    Принимает форматы: "ч. 3 ст. 5 ФЗ-38", "п. 2 ст. 51 ФЗ-156",
-    "ст. 28.1 ФЗ-38", "ст. 5 38-ФЗ" и т.п. Возвращает None если не парсится.
+    Принимает формы: "ч. 3 ст. 5 ФЗ-38", "ст. 51 ФЗ-156", "ст. 28.1 ФЗ-38",
+    "ст. 5 38-ФЗ", "ст. 28" (без ФЗ → law=None), "ФЗ-38" (без ст. → article=None).
 
     Важно: форма `NN-ФЗ` требует именно дефис (без пробела). Иначе паттерн
     жадно ловит номер статьи из строк вида "ст. 28 ФЗ-38" → law="28" вместо 38.
     """
+    if not segment:
+        return (None, None)
+    article_m = re.search(r"ст\.?\s*(\d+(?:[.\-]\d+)?)", segment, re.IGNORECASE)
+    law_m = re.search(r"ФЗ[-\s№]*(\d+)|(\d+)-ФЗ", segment, re.IGNORECASE)
+    article = re.sub(r"[^\d]", "", article_m.group(1)) if article_m else None
+    law = (law_m.group(1) or law_m.group(2)) if law_m else None
+    return (law or None, article or None)
+
+
+def _parse_law_references_all(ref: str) -> list[tuple[str, str]]:
+    """Парсит ВСЕ (law, article) пары из строки риск-references.
+
+    Стратегия: split по `,` и `;` → для каждого segment'а вытаскиваем (law, article).
+    Если в сегменте нет ФЗ-номера, наследуем последний явно указанный — это покрывает
+    кейсы "ст. 5, 28 ФЗ-38" → [(38, 5), (38, 28)]. Если в сегменте нет статьи —
+    skip (одинокий "ФЗ-38" без статьи нам бесполезен).
+    """
     if not ref:
-        return None
-    # Ищем номер статьи и номер закона.
-    article_m = re.search(r"ст\.?\s*(\d+(?:[.\-]\d+)?)", ref, re.IGNORECASE)
-    # ФЗ-38 / ФЗ 38 / ФЗ№38 — каноничная форма. 38-ФЗ — допустимая, но только с дефисом.
-    law_m = re.search(r"ФЗ[-\s№]*(\d+)|(\d+)-ФЗ", ref, re.IGNORECASE)
-    if not article_m or not law_m:
-        return None
-    article = re.sub(r"[^\d]", "", article_m.group(1))
-    law = law_m.group(1) or law_m.group(2)
-    if not (law and article):
-        return None
-    return (law, article)
+        return []
+    segments = re.split(r"[,;]", ref)
+    parsed_segments = [_parse_law_reference_segment(s) for s in segments]
+
+    # Forward pass: для сегментов без law — берём предыдущий явно указанный
+    last_law: str | None = None
+    for i, (law, article) in enumerate(parsed_segments):
+        if law:
+            last_law = law
+        elif last_law:
+            parsed_segments[i] = (last_law, article)
+
+    # Backward pass: для сегментов в начале (где предыдущего law не было) —
+    # берём следующий явно указанный. Покрывает "ст. 5 и ст. 28 ФЗ-38" если LLM
+    # пишет статью раньше закона.
+    next_law: str | None = None
+    for i in range(len(parsed_segments) - 1, -1, -1):
+        law, article = parsed_segments[i]
+        if law:
+            next_law = law
+        elif next_law:
+            parsed_segments[i] = (next_law, article)
+
+    seen: set[tuple[str, str]] = set()
+    result: list[tuple[str, str]] = []
+    for law, article in parsed_segments:
+        if law and article and (law, article) not in seen:
+            seen.add((law, article))
+            result.append((law, article))
+    return result
+
+
+def _parse_law_reference(ref: str) -> tuple[str, str] | None:
+    """Backward-compat обёртка: возвращает первый результат из multi-parser."""
+    refs = _parse_law_references_all(ref)
+    return refs[0] if refs else None
 
 
 def _chunk_law_article_key(meta: dict) -> tuple[str, str]:
@@ -366,50 +416,49 @@ def _chunk_law_article_key(meta: dict) -> tuple[str, str]:
 
 def _build_all_citations(
     mandatory: list[SearchResult],
-    supplementary: list[SearchResult],
     risks: list[dict] | None = None,
 ) -> list[CitationResponse]:
-    """Build citation list filtered by risks' law_references.
+    """Build citation list — ОДИН источник = ОДНА статья (склеенная целиком).
 
-    Возвращает только статьи, на которые реально ссылаются риски, чтобы не
-    показывать юзеру 15+ нерелевантных норм. Если ни одна ссылка из рисков
-    не парсится — возвращаем все mandatory как fallback.
+    Чанки группируются по нормализованному ключу (law_num, article_num) и
+    склеиваются `_reconstruct_article` в непрерывный текст. Юзер видит одну
+    карточку на статью, а не N обрывков. Фильтр оставляет только статьи на
+    которые реально ссылаются риски (multi-parser ловит несколько норм в строке).
     """
     referenced: set[tuple[str, str]] = set()
     for risk in risks or []:
-        parsed = _parse_law_reference(risk.get("law_reference", "") if isinstance(risk, dict) else "")
-        if parsed:
+        if not isinstance(risk, dict):
+            continue
+        for parsed in _parse_law_references_all(risk.get("law_reference", "")):
             referenced.add(parsed)
 
-    seen: set[tuple[str, str]] = set()
-    result: list[CitationResponse] = []
+    # Группируем по (law_num, article_num), сохраняя порядок первого появления.
+    groups: dict[tuple[str, str], list[SearchResult]] = {}
+    order: list[tuple[str, str]] = []
+    for r in mandatory:
+        k = _chunk_law_article_key(r.meta)
+        if k not in groups:
+            groups[k] = []
+            order.append(k)
+        groups[k].append(r)
 
-    def _add(r: SearchResult) -> None:
-        key = (r.meta.get("law", r.document_id), r.meta.get("article", ""))
-        if key in seen:
-            return
-        seen.add(key)
-        result.append(CitationResponse(
-            chunk_id=r.chunk_id,
-            document_id=r.document_id,
-            content=r.content,
-            retrieval_score=r.score,
-            meta=r.meta,
-        ))
+    def _make(chunks: list[SearchResult]) -> CitationResponse:
+        first = chunks[0]
+        return CitationResponse(
+            chunk_id=first.chunk_id,
+            document_id=first.document_id,
+            content=_reconstruct_article(chunks),
+            retrieval_score=max(c.score for c in chunks),
+            meta=first.meta,
+        )
 
     if referenced:
-        # Фильтр-режим: оставляем только цитируемые рисками статьи.
-        for r in list(mandatory) + list(supplementary):
-            if _chunk_law_article_key(r.meta) in referenced:
-                _add(r)
+        result = [_make(groups[k]) for k in order if k in referenced]
         if result:
             return result
-        # Если фильтрация ничего не дала (риски ссылаются на нормы вне выгруженных
-        # чанков) — fallback на mandatory чтобы юзер хоть что-то видел.
+        # Битый law_reference от LLM → fallback на все статьи mandatory.
 
-    for r in mandatory:
-        _add(r)
-    return result
+    return [_make(groups[k]) for k in order]
 
 
 @router.post("", response_model=AnalyzeResponse)
@@ -428,10 +477,8 @@ async def analyze(
 
     classification = await _classify_ad(llm, ad_text)
 
-    mandatory, supplementary = await _fetch_both(
-        repo, retriever, classification, top_k,
-    )
-    mandatory_ctx, supplementary_ctx = _build_structured_context(mandatory, supplementary)
+    mandatory = await repo.fetch_by_articles(classification.get("target_articles", []))
+    mandatory_ctx = _build_structured_context(mandatory)
 
     checklist_str = _format_checklist(classification.get("checklist", []))
     user_msg = AD_ANALYSIS_USER_TEMPLATE.format(
@@ -443,15 +490,13 @@ async def analyze(
         checklist=checklist_str,
         ad_text=ad_text,
         mandatory_context=mandatory_ctx,
-        supplementary_context=supplementary_ctx,
     )
 
     logger.info(
-        "[ANALYZE] material_kind=%s category=%s mandatory_articles=%d supplementary_articles=%d",
+        "[ANALYZE] material_kind=%s category=%s mandatory_articles=%d",
         classification.get("material_kind"),
         classification.get("category"),
         len({(r.meta.get("law"), r.meta.get("article")) for r in mandatory}),
-        len({(r.meta.get("law"), r.meta.get("article")) for r in supplementary}),
     )
 
     parsed, raw = await _analyze_stage2(llm, AD_ANALYSIS_SYSTEM_PROMPT, user_msg)
@@ -467,15 +512,15 @@ async def analyze(
         },
     )
 
-    # Догружаем статьи, упомянутые в рисках, но отсутствующие в mandatory+supplementary.
-    extra_chunks = await _fetch_missing_for_risks(repo, risks, mandatory + supplementary)
+    # Догружаем статьи, упомянутые в рисках, но отсутствующие в mandatory.
+    extra_chunks = await _fetch_missing_for_risks(repo, risks, mandatory)
     full_mandatory = list(mandatory) + extra_chunks
 
     return AnalyzeResponse(
         risks=risks,
         summary=parsed.get("summary", raw),
         overall_risk_level=parsed.get("overall_risk_level", "unknown"),
-        citations=_build_all_citations(full_mandatory, supplementary, risks),
+        citations=_build_all_citations(full_mandatory, risks),
     )
 
 
@@ -510,17 +555,16 @@ async def analyze_stream(
         thinking_label = _humanize_classification(classification)
         yield _event({"type": "thinking", "text": f"{thinking_label}. Загружаю нормативные акты..."})
 
-        mandatory, supplementary = await _fetch_both(repo, retriever, classification, top_k)
-        total = len(set((r.meta.get("law", ""), r.meta.get("article", "")) for r in mandatory + supplementary))
+        mandatory = await repo.fetch_by_articles(classification.get("target_articles", []))
+        total = len({(r.meta.get("law", ""), r.meta.get("article", "")) for r in mandatory})
         yield _event({"type": "thinking", "text": f"Загружено {total} статей. Анализирую на соответствие..."})
 
-        mandatory_ctx, supplementary_ctx = _build_structured_context(mandatory, supplementary)
+        mandatory_ctx = _build_structured_context(mandatory)
         logger.info(
-            "[ANALYZE] material_kind=%s category=%s mandatory_articles=%d supplementary_articles=%d",
+            "[ANALYZE] material_kind=%s category=%s mandatory_articles=%d",
             classification.get("material_kind"),
             classification.get("category"),
-            len({(r.meta.get("law"), r.meta.get("article")) for r in mandatory}),
-            len({(r.meta.get("law"), r.meta.get("article")) for r in supplementary}),
+            total,
         )
 
         checklist_str = _format_checklist(classification.get("checklist", []))
@@ -533,7 +577,6 @@ async def analyze_stream(
             checklist=checklist_str,
             ad_text=ad_text,
             mandatory_context=mandatory_ctx,
-            supplementary_context=supplementary_ctx,
         )
 
         # Per-risk streaming: каждый завершённый объект из массива risks летит
@@ -570,10 +613,10 @@ async def analyze_stream(
         }})
 
         # Догружаем статьи, упомянутые в рисках, но отсутствующие в выгруженных чанках.
-        extra_chunks = await _fetch_missing_for_risks(repo, risks, mandatory + supplementary)
+        extra_chunks = await _fetch_missing_for_risks(repo, risks, mandatory)
         full_mandatory = list(mandatory) + extra_chunks
 
-        citations_data = [c.model_dump() for c in _build_all_citations(full_mandatory, supplementary, risks)]
+        citations_data = [c.model_dump() for c in _build_all_citations(full_mandatory, risks)]
         yield _event({"type": "citations", "data": citations_data})
         yield "data: [DONE]\n\n"
 
@@ -581,25 +624,6 @@ async def analyze_stream(
         logger.info("analyze_total_ms", extra={"total_ms": total_ms})
 
     return StreamingResponse(generate(), media_type="text/event-stream")
-
-
-async def _fetch_both(
-    repo: VectorRepository,
-    retriever: HybridRetriever,
-    classification: dict,
-    top_k: int,
-) -> tuple[list[SearchResult], list[SearchResult]]:
-    """Fetch mandatory (direct lookup) and supplementary (retrieval) in parallel."""
-    import asyncio
-
-    mandatory_task = asyncio.create_task(
-        repo.fetch_by_articles(classification.get("target_articles", []))
-    )
-    supplementary_task = asyncio.create_task(
-        _supplementary_search(retriever, classification.get("search_queries", []), top_k=top_k)
-    )
-    mandatory, supplementary = await asyncio.gather(mandatory_task, supplementary_task)
-    return mandatory, supplementary
 
 
 def _format_checklist(items: list[str]) -> str:
