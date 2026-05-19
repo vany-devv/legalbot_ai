@@ -15,7 +15,10 @@ import (
 var ErrForbidden = errors.New("analysis: access forbidden")
 
 const (
-	maxTitleChars = 60
+	// 140 — компромисс: полное имя файла/материала в отчёте и заголовке,
+	// в сайдбаре всё равно усекается CSS-truncate. Уже сохранённые анализы
+	// сохраняют свой старый 60-символьный заголовок.
+	maxTitleChars = 140
 	listMaxLimit  = 100
 )
 

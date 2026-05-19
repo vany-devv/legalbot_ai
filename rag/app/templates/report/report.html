@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<style>
+  /* ─── Брендовые шрифты (как на фронте: Manrope display / Inter sans) ─── */
+  @font-face {
+    font-family: 'Inter';
+    src: url('fonts/Inter.ttf');
+    font-weight: 100 900; font-style: normal;
+  }
+  @font-face {
+    font-family: 'Manrope';
+    src: url('fonts/Manrope.ttf');
+    font-weight: 200 800; font-style: normal;
+  }
+
+  :root {
+    --brand:   #1B3A5C;
+    --accent:  #2A4F82;
+    --ink:     #1A1D24;
+    --muted:   #4F5563;
+    --faint:   #8A8F9C;
+    --rim:     #E2E2DA;
+    --rim-2:   #CFCFC4;
+    --panel:   #FFFFFF;
+    --canvas:  #FAFAF7;
+    --danger:  #C62828;
+    --warning: #B45309;
+    --amber:   #CA8A04;
+    --success: #2E7D32;
+    --accent-tint: #EAF1F9;
+  }
+
+  @page {
+    size: A4;
+    margin: 20mm 17mm 18mm;
+    @bottom-center {
+      content: "Страница " counter(page) " из " counter(pages);
+      font-family: 'Inter', sans-serif;
+      font-size: 8pt; color: #8A8F9C;
+    }
+    @bottom-right {
+      content: "LegalBot AI не является юридическим заключением";
+      font-family: 'Inter', sans-serif;
+      font-size: 7.5pt; color: #B7BCC6;
+    }
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', sans-serif;
+    color: var(--ink);
+    font-size: 10.5pt;
+    line-height: 1.6;
+  }
+  h1, .sec-title, .brand, .score-num, .ov-badge, .risk-badge {
+    font-family: 'Manrope', 'Inter', sans-serif;
+  }
+
+  /* ─── Вступление ─── */
+  .intro { margin-bottom: 26pt; }
+  .intro .brand {
+    font-size: 19pt; font-weight: 800; color: var(--brand);
+    margin-bottom: 22pt; letter-spacing: -0.3pt;
+    white-space: nowrap;
+  }
+  .intro .brand img.mark {
+    width: 28pt; height: 28pt; border-radius: 8pt;
+    display: inline-block; vertical-align: middle; margin-right: 12pt;
+  }
+  .intro .brand span.bn { vertical-align: middle; }
+  .intro h1 {
+    font-size: 20pt; font-weight: 800; letter-spacing: -0.4pt;
+    color: var(--ink); margin-bottom: 10pt; line-height: 1.25;
+  }
+  .intro .subj { font-size: 11pt; color: var(--muted); margin-bottom: 6pt; }
+  .intro .date { font-size: 9pt; color: var(--faint); margin-bottom: 18pt; }
+  .intro .lead {
+    font-size: 10pt; color: var(--muted); line-height: 1.65;
+    border-left: 2.5pt solid var(--rim-2); padding-left: 14pt;
+  }
+
+  .section { margin-top: 26pt; }
+  .section.break-page { page-break-before: always; margin-top: 0; }
+  .sec-title {
+    font-size: 14pt; font-weight: 800; color: var(--brand);
+    border-bottom: 1.5pt solid var(--brand);
+    padding-bottom: 7pt; margin-bottom: 18pt; letter-spacing: -0.2pt;
+  }
+
+  /* ─── Рейтинг ─── */
+  .score-card {
+    border: 0.75pt solid var(--rim); border-radius: 14pt;
+    background: var(--panel); padding: 22pt 26pt;
+    display: flex; align-items: center; gap: 38pt;
+    page-break-inside: avoid;
+  }
+  .score-box {
+    flex-shrink: 0; text-align: center; min-width: 86pt;
+  }
+  .score-box .score-num {
+    font-size: 50pt; font-weight: 800; line-height: 1;
+    letter-spacing: -1pt;
+  }
+  .score-num.sc-danger  { color: var(--danger); }
+  .score-num.sc-warning { color: var(--warning); }
+  .score-num.sc-amber   { color: var(--amber); }
+  .score-num.sc-ok      { color: var(--success); }
+  .score-box .score-of {
+    font-size: 8pt; color: var(--faint);
+    text-transform: uppercase; letter-spacing: 2pt;
+    margin-top: 8pt;
+  }
+  .score-card .score-meta { flex: 1; }
+  .score-card .ov-badge {
+    display: inline-block; padding: 6pt 15pt; border-radius: 999pt;
+    font-weight: 800; font-size: 10.5pt; margin-bottom: 14pt;
+  }
+  .ov-badge.high   { background: #FBE9E7; color: var(--danger); }
+  .ov-badge.medium { background: #FFF3E0; color: var(--warning); }
+  .ov-badge.low    { background: #FFF8E1; color: #9A7B0A; }
+  .ov-badge.none   { background: #E8F5E9; color: var(--success); }
+  .counts { margin-bottom: 14pt; }
+  .cnt {
+    display: inline-block; font-size: 9.5pt; font-weight: 600;
+    color: var(--muted); margin-right: 20pt;
+  }
+  .cnt .dot {
+    display: inline-block; width: 7pt; height: 7pt; border-radius: 50%;
+    margin-right: 7pt; vertical-align: -0.5pt;
+  }
+  .cnt.high .dot   { background: var(--danger); }
+  .cnt.medium .dot { background: var(--warning); }
+  .cnt.low .dot    { background: var(--amber); }
+  .cnt.ok { color: var(--success); font-weight: 700; }
+  .score-card .summary {
+    font-size: 9.5pt; color: var(--muted); line-height: 1.6;
+  }
+
+  /* ─── Материал ─── */
+  .material {
+    white-space: pre-wrap; word-wrap: break-word;
+    font-size: 10pt; line-height: 1.75; color: var(--ink);
+    background: var(--canvas); border: 0.75pt solid var(--rim);
+    border-radius: 10pt; padding: 18pt 20pt;
+  }
+  mark.mk { padding: 0.5pt 1.5pt; border-radius: 2pt; }
+  mark.mk-high   { background: #FFD9D6; }
+  mark.mk-medium { background: #FFE6C7; }
+  mark.mk-low    { background: #FFF1C2; }
+  sup.mk-n {
+    font-size: 6.5pt; font-weight: 800; color: var(--brand);
+    padding-left: 1.5pt; vertical-align: super;
+  }
+
+  /* ─── Карточка риска (1:1 с RiskCard.vue, просторнее) ─── */
+  .risk {
+    position: relative;
+    border: 0.75pt solid var(--rim); border-radius: 12pt;
+    background: var(--panel); overflow: hidden;
+    margin-bottom: 16pt; padding: 16pt 18pt 18pt 26pt;
+    page-break-inside: avoid;
+  }
+  .risk .bar {
+    position: absolute; left: 9pt; top: 10pt; bottom: 10pt;
+    width: 3.5pt; border-radius: 2pt;
+  }
+  .risk .bar.high   { background: var(--danger); }
+  .risk .bar.medium { background: var(--warning); }
+  .risk .bar.low    { background: var(--amber); }
+  .risk-head {
+    display: flex; align-items: center; gap: 24pt; margin-bottom: 14pt;
+  }
+  .risk-badge {
+    flex-shrink: 0; font-size: 8pt; font-weight: 800;
+    text-transform: uppercase; letter-spacing: 0.4pt;
+    padding: 4pt 11pt; border-radius: 6pt; margin-right: 4pt;
+  }
+  .risk-badge.high   { background: #FBE5E3; color: var(--danger); }
+  .risk-badge.medium { background: #FBEAD3; color: var(--warning); }
+  .risk-badge.low    { background: #FBF0CC; color: #8A6D04; }
+  .risk-law {
+    font-size: 10pt; color: var(--muted); font-weight: 600;
+  }
+  .risk-quote {
+    border-left: 2.5pt solid var(--rim-2); padding-left: 13pt;
+    font-size: 10pt; line-height: 1.6; color: var(--muted);
+    font-style: italic; margin-bottom: 12pt;
+  }
+  .risk-desc {
+    font-size: 10pt; line-height: 1.65; color: var(--ink);
+    margin-bottom: 13pt;
+  }
+  .risk-rec {
+    background: var(--accent-tint); border-radius: 9pt;
+    padding: 11pt 14pt; font-size: 9.5pt; line-height: 1.6;
+  }
+  .risk-rec .lbl { font-weight: 800; color: var(--accent); }
+  .risk-rec .txt { color: var(--ink); }
+
+  .no-violations {
+    background: #E8F5E9; border: 0.75pt solid #A5D6A7;
+    border-radius: 12pt; padding: 20pt; color: var(--success);
+    font-size: 11pt; font-weight: 700; text-align: center;
+  }
+</style>
+</head>
+<body>
+
+  <div class="intro">
+    <div class="brand"><img class="mark" src="logo.svg" alt="LegalBot"><span class="bn">LegalBot&nbsp;AI</span></div>
+    <h1>Отчёт о проверке рекламного материала</h1>
+    <div class="subj">{{ title }}</div>
+    <div class="date">Сформирован: {{ date }}</div>
+    <div class="lead">
+      Документ содержит результат автоматической проверки рекламного материала
+      на соответствие законодательству РФ о рекламе (ФЗ-38 и смежные нормы).
+      Ниже — итоговый рейтинг, проанализированный текст с выделенными
+      фрагментами и перечень выявленных рисков. Не является официальным
+      юридическим заключением.
+    </div>
+  </div>
+
+  <div class="score-card">
+    <div class="score-box">
+      <div class="score-num {{ score_cls }}">{{ score }}</div>
+      <div class="score-of">из 10</div>
+    </div>
+    <div class="score-meta">
+      <div class="ov-badge {{ overall }}">{{ overall_label }}</div>
+      {% if total_risks %}
+      <div class="counts">
+        {% if counts.high %}<span class="cnt high"><span class="dot"></span>Высоких — {{ counts.high }}</span>{% endif %}
+        {% if counts.medium %}<span class="cnt medium"><span class="dot"></span>Средних — {{ counts.medium }}</span>{% endif %}
+        {% if counts.low %}<span class="cnt low"><span class="dot"></span>Низких — {{ counts.low }}</span>{% endif %}
+      </div>
+      {% endif %}
+      {% if summary %}<div class="summary">{{ summary }}</div>{% endif %}
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="sec-title">Анализируемый материал</div>
+    <div class="material">{{ annotated_html | safe }}</div>
+  </div>
+
+  <div class="section break-page">
+    <div class="sec-title">Выявленные риски</div>
+    {% if risks %}
+      {% for r in risks %}
+      <div class="risk">
+        <div class="bar {{ r.level }}"></div>
+        <div class="risk-head">
+          <span class="risk-badge {{ r.level }}">{{ r.level_label }}</span>
+          <span class="risk-law">{{ r.law_reference }}</span>
+        </div>
+        {% if r.fragment %}
+        <div class="risk-quote">«{{ r.fragment }}»</div>
+        {% endif %}
+        <div class="risk-desc">{{ r.description }}</div>
+        {% if r.suggestion %}
+        <div class="risk-rec">
+          <span class="lbl">Рекомендация:</span>
+          <span class="txt">{{ r.suggestion }}</span>
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="no-violations">
+        Нарушений не выявлено. Материал соответствует требованиям законодательства РФ о рекламе.
+      </div>
+    {% endif %}
+  </div>
+
+</body>
+</html>

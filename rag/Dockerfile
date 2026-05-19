@@ -22,7 +22,9 @@ RUN pip install --no-cache-dir \
     "httpx>=0.28.0,<1.0.0" \
     "python-docx>=1.1.0,<1.2.0" \
     "python-multipart>=0.0.9,<0.1.0" \
-    "striprtf>=0.0.28"
+    "striprtf>=0.0.28" \
+    "jinja2>=3.1,<4" \
+    "weasyprint>=63,<64"
 
 # Runtime stage — no build tools, smaller final image
 FROM python:3.13-slim
@@ -32,7 +34,14 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-RUN apt-get update && apt-get install -y --no-install-recommends libpq5 curl \
+# libpq5 — asyncpg; остальное — runtime-зависимости WeasyPrint (Pango/Cairo/
+# GDK-Pixbuf/HarfBuzz/FFI) для рендера PDF из HTML+CSS. shared-mime-info нужен
+# WeasyPrint для определения типов встроенных ресурсов.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 curl \
+    libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b libffi8 \
+    libgdk-pixbuf-2.0-0 shared-mime-info fontconfig \
+    fonts-noto-core fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages

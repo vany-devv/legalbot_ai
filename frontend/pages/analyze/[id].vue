@@ -26,9 +26,9 @@
           <div class="flex items-center gap-2 flex-shrink-0">
             <button
               v-if="result"
-              class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-rim text-sm text-ink-muted hover:text-ink hover:bg-dimmed transition-colors cursor-pointer"
+              class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-rim text-sm text-ink-muted hover:text-ink hover:bg-dimmed transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               @click="exportPdf"
-              :disabled="exporting"
+              :disabled="exporting || !(savedId || currentAnalysisId)"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -457,11 +457,27 @@ function formatLawSub(c: any): string {
 }
 
 async function exportPdf() {
-  if (exporting.value) return
+  const id = savedId.value || currentAnalysisId.value
+  if (!id || exporting.value) return
   exporting.value = true
   try {
-    await nextTick()
-    window.print()
+    const res = await fetch(`/api/analyses/${id}/report.pdf`, { credentials: 'include' })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    const safeTitle = (materialTitle.value || 'анализ')
+      .replace(/[/\\:*?"<>|…]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    a.download = `LegalBot_отчёт_${safeTitle}.pdf`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  } catch {
+    useToast().show('Не удалось сформировать PDF-отчёт', 'error', 5000)
   } finally {
     exporting.value = false
   }
@@ -691,8 +707,4 @@ function splitBySentences(text: string, target = 280): string[] {
 }
 .source-expand-enter-from,
 .source-expand-leave-to { opacity: 0; max-height: 0; margin-top: 0 !important; margin-bottom: 0 !important; }
-
-@media print {
-  :deep(.app-shell) > :not(.main-area) { display: none !important; }
-}
 </style>

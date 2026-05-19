@@ -211,6 +211,34 @@ func (c *Client) AnalyzeStream(ctx context.Context, text string, fileData io.Rea
 	return resp, nil
 }
 
+// GenerateReport отправляет JSON сохранённого анализа в POST /report/pdf и
+// возвращает сырой ответ (application/pdf). Вызывающий обязан закрыть Body.
+func (c *Client) GenerateReport(ctx context.Context, payload []byte) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		c.baseURL+"/report/pdf", bytes.NewReader(payload))
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/pdf")
+	setRequestID(ctx, req)
+
+	log := logger.FromCtx(ctx)
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		log.Error("rag_call_failed", "endpoint", "/report/pdf", "err", err)
+		return nil, fmt.Errorf("call RAG report: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		log.Error("rag_call_failed", "endpoint", "/report/pdf", "status", resp.StatusCode, "body", truncate(string(body), 256))
+		return nil, fmt.Errorf("RAG report returned %d: %s", resp.StatusCode, string(body))
+	}
+	log.Info("rag_call", "endpoint", "/report/pdf", "status", resp.StatusCode)
+	return resp, nil
+}
+
 func (c *Client) Health(ctx context.Context) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/health", nil)
 	if err != nil {
