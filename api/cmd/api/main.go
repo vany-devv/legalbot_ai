@@ -53,7 +53,10 @@ func main() {
 	chatModule := chat.Wire(database.DB)
 	chatModule.Handler.RegisterRoutes(mux)
 
-	analysisModule := analysis.Wire(database.DB)
+	// ragClient шарится: analysis (PDF-отчёт), ask- и analyze-оркестраторы.
+	ragClient := ragclient.New(cfg.RAGServiceURL)
+
+	analysisModule := analysis.Wire(database.DB, ragClient)
 	analysisModule.Handler.RegisterRoutes(mux)
 
 	// RAG proxy: публичные роуты (search, health) и admin-only (ingest, documents).
@@ -62,7 +65,6 @@ func main() {
 	ragProxy.RegisterAdminRoutes(mux, middleware.RequireAdmin(authModule.UserRepo))
 
 	// Orchestrator (POST /api/chat/ask)
-	ragClient := ragclient.New(cfg.RAGServiceURL)
 	askHandler := orchestrator.NewAskHandler(
 		ragClient,
 		billingModule.CheckLimits,

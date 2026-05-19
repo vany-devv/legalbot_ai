@@ -6,6 +6,7 @@ import (
 	"legalbot/services/internal/analysis/handler"
 	"legalbot/services/internal/analysis/repository"
 	"legalbot/services/internal/analysis/usecase"
+	"legalbot/services/internal/ragclient"
 )
 
 type Module struct {
@@ -13,7 +14,7 @@ type Module struct {
 	SaveAnalysisUC *usecase.SaveAnalysisUseCase
 }
 
-func Wire(db *sql.DB) *Module {
+func Wire(db *sql.DB, ragClient *ragclient.Client) *Module {
 	repo := repository.NewPostgresAnalysisRepository(db)
 
 	saveUC := usecase.NewSaveAnalysisUseCase(repo)
@@ -22,7 +23,7 @@ func Wire(db *sql.DB) *Module {
 	deleteUC := usecase.NewDeleteAnalysisUseCase(repo)
 
 	return &Module{
-		Handler:        handler.NewAnalysisHandler(listUC, getUC, deleteUC),
+		Handler:        handler.NewAnalysisHandler(listUC, getUC, deleteUC, ragClient),
 		SaveAnalysisUC: saveUC,
 	}
 }
